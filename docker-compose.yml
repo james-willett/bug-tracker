@@ -62,7 +62,7 @@ services:
 
   performance-tests:
     image: grafana/k6:latest
-    user: "1000:1000" # Match GitHub Actions runner UID
+    user: "${UID:-1000}:${GID:-1000}" # Use host user's UID/GID
     volumes:
       - ./performance-tests:/tests
       - ./performance-tests/results:/home/k6/results # Persistent storage with correct permissions
