@@ -112,3 +112,29 @@ jobs:
           name: Integration Tests
           path: ./tests/test-results/*.xml
           reporter: jest-junit
+
+      # After integration tests succeed
+      - name: Setup performance tests
+        if: success()
+        run: |
+          mkdir -p performance-tests/results
+          chmod 777 performance-tests/results
+
+      - name: Run performance tests
+        if: success()
+        run: |
+          docker-compose up --build --abort-on-container-exit performance-tests || true
+          EXIT_CODE=$(docker-compose ps -q performance-tests | xargs -r docker inspect -f '{{ .State.ExitCode }}')
+          echo $EXIT_CODE > .perf_exit_code
+          docker-compose down
+          if [ "$(cat .perf_exit_code)" != "0" ]; then
+            exit $(cat .perf_exit_code)
+          fi
+
+      - name: Upload performance test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: k6-results
+          path: ./performance-tests/results/
+          retention-days: 30

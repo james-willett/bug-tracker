@@ -9,7 +9,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8080
+      - NEXT_PUBLIC_API_URL=http://backend:8080 # For container-to-container communication
     depends_on:
       backend:
         condition: service_healthy
@@ -59,3 +59,18 @@ services:
         condition: service_healthy
     networks:
       - bugtracker
+
+  performance-tests:
+    build:
+      context: ./performance-tests
+      dockerfile: Dockerfile
+    environment:
+      - K6_OUT=json=/performance-tests/results/results.json
+    volumes:
+      - ./performance-tests/results:/performance-tests/results
+    depends_on:
+      tests:
+        condition: service_completed_successfully
+    networks:
+      - bugtracker
+    command: run journey.js

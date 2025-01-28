@@ -11,7 +11,7 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Set the API URL at build time
+# Set default API URL for container usage
 ENV NEXT_PUBLIC_API_URL=http://backend:8080
 
 # Exclude test reports
