@@ -65,9 +65,9 @@ services:
       context: ./performance-tests
       dockerfile: Dockerfile
     environment:
-      - K6_OUT=json=/performance-tests/results/results.json
+      - K6_OUT=json=/tmp/results.json
     volumes:
-      - ./performance-tests/results:/performance-tests/results
+      - ./performance-tests/results:/tmp
     depends_on:
       tests:
         condition: service_completed_successfully
