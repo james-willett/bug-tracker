@@ -61,16 +61,19 @@ services:
       - bugtracker
 
   performance-tests:
-    build:
-      context: ./performance-tests
-      dockerfile: Dockerfile
-    environment:
-      - K6_OUT=json=/tmp/results.json
+    image: grafana/k6:latest
+    user: "1000:1000" # Match GitHub Actions runner UID
     volumes:
-      - ./performance-tests/results:/tmp
+      - ./performance-tests:/tests
+      - ./performance-tests/results:/home/k6/results # Persistent storage with correct permissions
+    environment:
+      - K6_OUT=json=/home/k6/results/results.json
+    working_dir: /tests
+    command: run --out json=/home/k6/results/results.json journey.js
     depends_on:
-      tests:
-        condition: service_completed_successfully
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     networks:
       - bugtracker
-    command: run journey.js

@@ -136,5 +136,5 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: k6-results
-          path: ./performance-tests/results/
+          path: ./performance-tests/results/results.json
           retention-days: 30
