@@ -1,0 +1,19 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Unit Tests - Backend') {
+            agent {
+                docker {
+                    image 'snakee/golang-unit:1.21'
+                    reuseNode true
+                }
+            }
+            steps {
+                dir ('bugtracker-backend') {
+                    sh 'go test -v ./...'
+                }
+            }
+        }
+    }
+}
