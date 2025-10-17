@@ -1,0 +1,21 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Test Pipeline Setup') {
+            steps {
+                echo "✅ Jenkins pipeline is working correctly!"
+                sh 'echo "Hello from inside Jenkins!"'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "🎉 Pipeline executed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed."
+        }
+    }
+}

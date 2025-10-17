@@ -1,39 +1,65 @@
-# Test Results
+# =========================
+# 🧪 Test & Reports
+# =========================
 test-results/
-playwright-report/
-playwright/.cache/
 **/test-results/
-**/playwright-report/
-**/playwright/.cache/
-**/last-run.json
 **/test-results.xml
 **/test-results.json
+**/last-run.json
+playwright-report/
+**/playwright-report/
+playwright/.cache/
+**/playwright/.cache/
 tests-perf/test-results/*
 tests-perf/perf-results.html
+bugtracker-backend/report.xml
+bugtracker-backend/coverage*
+bugtracker-frontend/full_output.txt
 
-# Dependencies
+# =========================
+# 🧩 Jenkins Data
+# =========================
+# Jenkins runtime data (not needed in Git)
+jenkins/jenkins_home/
+jenkins/jenkins_home_old/
+jenkins/jenkins_home/caches/
+jenkins/jenkins_home/plugins/
+jenkins/jenkins_home/jobs/
+jenkins/jenkins_home/war/
+
+# =========================
+# 📦 Dependencies
+# =========================
 node_modules/
+tests/node_modules/
 
-# Environment
+# =========================
+# ⚙️ Environment & Config
+# =========================
 .env
 .env.local
 
-# IDE
+# =========================
+# 💻 IDE & Editor Files
+# =========================
 .idea/
 .vscode/
 .groovylintrc.json
 
-# OS
-.DS_Store
-*.log
-
-# Build outputs
+# =========================
+# 🧱 Build Artifacts
+# =========================
 dist/
 build/
 
-# Process files
+# =========================
+# 🪟 OS & Logs
+# =========================
+.DS_Store
+*.log
+
+# =========================
+# ⚙️ Process IDs
+# =========================
 backend.pid
 frontend.pid
-
-# Node modules in tests directory
-/tests/node_modules/
