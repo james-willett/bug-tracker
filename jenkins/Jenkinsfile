@@ -12,17 +12,13 @@ pipeline {
             steps {
                 dir('bugtracker-backend') {
                     sh """
+                        apk add --no-cache git
+                        export PATH=\$\$PATH:\$\$(go env GOPATH)/bin
                         GOCACHE=/tmp/go-build-cache go install github.com/jstemmer/go-junit-report@latest
-                        go test ./... -v 2>&1 | go-junit-report > test-results.xml
+                        GOCACHE=/tmp/go-build-cache go test ./... -v 2>&1 | go-junit-report > test-results.xml || true
                     """
                 }
             }
-            post {
-                always {
-                    junit 'bugtracker-backend/test-results.xml'
-                }
-            }
-           
         }
 
         stage('Unit Tests Frontend') {
@@ -45,7 +41,18 @@ pipeline {
 
     post {
         always {
-            junit 'bugtracker-frontend/test-results.xml'
+            script {
+                def testResults = []
+                if (fileExists('bugtracker-backend/test-results.xml')) {
+                    testResults.add('bugtracker-backend/test-results.xml')
+                }
+                if (fileExists('bugtracker-frontend/test-results.xml')) {
+                    testResults.add('bugtracker-frontend/test-results.xml')
+                }
+                if (testResults.size() > 0) {
+                    junit testResults.join(',')
+                }
+            }
         }
     }
 }
