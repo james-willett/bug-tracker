@@ -14,6 +14,25 @@ pipeline {
                    sh 'GOCACHE=/tmp/go-build-cache go test ./... -v'
                 }
             }
+
+        stage('Unit Tests Frontend') {
+            agent {
+                docker {
+                    image 'node:20-alpine'
+                    reuseNode true
+                }
+            }
+            steps {
+                dir('bugtracker-frontend') {
+                    sh'''
+                        npm ci
+                        npm run test
+                    '''
+                }
+            }
+
+
+
         }
     }
 }
