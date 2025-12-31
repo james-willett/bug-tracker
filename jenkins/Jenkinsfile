@@ -24,10 +24,11 @@ pipeline {
             }
             steps {
                 dir('bugtracker-frontend') {
-                    sh'''
+
+                    sh """
                         npm ci
                         npm run test
-                    '''
+                    """
                 }
             }
 
