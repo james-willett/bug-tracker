@@ -20,8 +20,8 @@ COPY . .
 # Build the application
 RUN go build -o main cmd/bugtracker/main.go
 
-# Expose port 8080
-EXPOSE 8080
+# Expose port 8081
+EXPOSE 8081
 
 # Run the binary
 CMD ["./main"] 

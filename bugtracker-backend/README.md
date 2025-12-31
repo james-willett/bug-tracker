@@ -4,7 +4,7 @@ This document outlines the available endpoints in the Bug Tracker API.
 
 ## Base URL
 
-When running locally: `http://localhost:8080/api`
+When running locally: `http://localhost:8081/api`
 
 ## Endpoints
 
