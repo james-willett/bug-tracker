@@ -14,6 +14,7 @@ pipeline {
                    sh 'GOCACHE=/tmp/go-build-cache go test ./... -v'
                 }
             }
+        }
 
         stage('Unit Tests Frontend') {
             agent {
@@ -24,16 +25,12 @@ pipeline {
             }
             steps {
                 dir('bugtracker-frontend') {
-
                     sh """
                         npm ci
                         npm run test
                     """
                 }
             }
-
-
-
         }
     }
 }
