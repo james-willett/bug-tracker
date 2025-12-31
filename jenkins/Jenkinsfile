@@ -17,6 +17,11 @@ pipeline {
                     """
                 }
             }
+            post {
+                always {
+                    junit 'bugtracker-backend/test-results.xml'
+                }
+            }
            
         }
 
@@ -41,7 +46,6 @@ pipeline {
     post {
         always {
             junit 'bugtracker-frontend/test-results.xml'
-            junit 'bugtracker-backend/test-results.xml'
         }
     }
 }
