@@ -52,7 +52,7 @@ describe("CommentSection", () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/bugs/1/comments",
+        "http://localhost:8081/api/bugs/1/comments",
         {
           method: "POST",
           headers: {

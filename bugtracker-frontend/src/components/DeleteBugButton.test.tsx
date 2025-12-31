@@ -23,7 +23,7 @@ describe('DeleteBugButton', () => {
         render(<DeleteBugButton bugId={bugId} onDelete={mockOnDelete} />);
         await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
-        expect(global.fetch).toHaveBeenCalledWith(`http://localhost:8080/api/bugs/${bugId}`, {
+        expect(global.fetch).toHaveBeenCalledWith(`http://localhost:8081/api/bugs/${bugId}`, {
             method: 'DELETE',
         });
         expect(mockOnDelete).toHaveBeenCalled();
@@ -38,7 +38,7 @@ describe('DeleteBugButton', () => {
         render(<DeleteBugButton bugId={bugId} onDelete={mockOnDelete} />);
         await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
-        expect(global.fetch).toHaveBeenCalledWith(`http://localhost:8080/api/bugs/${bugId}`, {
+        expect(global.fetch).toHaveBeenCalledWith(`http://localhost:8081/api/bugs/${bugId}`, {
             method: 'DELETE',
         });
         expect(consoleErrorSpy).toHaveBeenCalled();

@@ -33,7 +33,7 @@ describe("Bug API", () => {
 
       const result = await getBugs();
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/bugs"
+        "http://localhost:8081/api/bugs"
       );
       expect(result).toEqual(mockBugs);
     });
@@ -78,7 +78,7 @@ describe("Bug API", () => {
 
       const result = await createBug(mockBug);
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/bugs",
+        "http://localhost:8081/api/bugs",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -132,7 +132,7 @@ describe("Bug API", () => {
 
       const result = await updateBug("1", mockBug);
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/bugs/1",
+        "http://localhost:8081/api/bugs/1",
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -180,7 +180,7 @@ describe("Bug API", () => {
 
       await deleteBug("1");
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/bugs/1",
+        "http://localhost:8081/api/bugs/1",
         {
           method: "DELETE",
         }
