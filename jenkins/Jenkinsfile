@@ -11,14 +11,14 @@ pipeline {
             }
             steps {
                 dir('bugtracker-backend') {
-                   sh 'GOCACHE=/tmp/go-build-cache go test ./... -v 2>&1 | go-junit-report > test-results.xml'
+                    sh """
+                        apk add --no-cache git
+                        go install github.com/jstemmer/go-junit-report@latest
+                        GOCACHE=/tmp/go-build-cache go test ./... -v 2>&1 | \$\$(go env GOPATH)/bin/go-junit-report > test-results.xml
+                    """
                 }
             }
-                post {
-                    always {
-                        junit 'bugtracker-backend/test-results.xml'
-                    }
-                }
+           
         }
 
         stage('Unit Tests Frontend') {
@@ -42,6 +42,7 @@ pipeline {
     post {
         always {
             junit 'bugtracker-frontend/test-results.xml'
+            junit 'bugtracker-backend/test-results.xml'
         }
     }
 }
