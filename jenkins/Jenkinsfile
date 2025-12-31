@@ -11,7 +11,11 @@ pipeline {
             }
             steps {
                 dir('bugtracker-backend') {
-                   sh 'GOCACHE=/tmp/go-build-cache go test ./... -v'
+                   sh """
+                       apk add --no-cache git
+                       go install gotest.tools/gotestsum@latest
+                       GOCACHE=/tmp/go-build-cache gotestsum --junitfile junit-backend.xml --format standard-verbose -- ./...
+                   """
                 }
             }
         }
@@ -31,6 +35,13 @@ pipeline {
                     """
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            junit 'bugtracker-backend/junit-backend.xml'
+            junit 'bugtracker-frontend/test-results.xml'
         }
     }
 }
