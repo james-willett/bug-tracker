@@ -40,3 +40,9 @@ frontend.pid
 
 # Node modules in tests directory
 /tests/node_modules/
+/.vs/bug-tracker/CopilotIndices/17.14.1561.44479/CodeChunks.db
+/.vs/bug-tracker/CopilotIndices/17.14.1561.44479/CodeChunks.db-shm
+/.vs/bug-tracker/CopilotIndices/17.14.1561.44479/CodeChunks.db-wal
+/.vs/bug-tracker/CopilotIndices/17.14.1561.44479/SemanticSymbols.db
+/.vs/bug-tracker/CopilotIndices/17.14.1561.44479/SemanticSymbols.db-shm
+/.vs/bug-tracker/CopilotIndices/17.14.1561.44479/SemanticSymbols.db-wal
