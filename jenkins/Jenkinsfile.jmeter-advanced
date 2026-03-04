@@ -1,0 +1,115 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Launch Application') {
+            agent {
+                docker {
+                    image 'docker:27.5.1'
+                    reuseNode true
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0 --network=host'
+                }
+            }
+            steps {
+                sh 'docker compose up --build -d'
+            }
+        }
+
+        stage('Wait for Application') {
+            agent {
+                docker {
+                    image 'node:20-alpine'
+                    reuseNode true
+                    args '--network=host'
+                }
+            }
+            steps {
+                sh 'npx wait-port http://localhost:8080/api/health -t 30000'
+            }
+        }
+
+        stage('JMeter Performance Tests') {
+            agent {
+                docker {
+                    image 'justb4/jmeter:latest'
+                    reuseNode true
+                    args '--network=host -u root --entrypoint=""'
+                }
+            }
+            steps {
+                dir('tests-perf') {
+                    sh '''
+                        # Basic load test
+                        rm -rf jmeter-report jmeter-results.jtl
+                        jmeter -n \
+                          -t bugtracker-jmeter.jmx \
+                          -l jmeter-results.jtl \
+                          -e -o jmeter-report
+                        
+                        # Bulk test: Create 100 bugs and list them
+                        rm -rf bulk-report bulk-results.jtl
+                        jmeter -n \
+                          -t bugtracker-bulk-test.jmx \
+                          -l bulk-results.jtl \
+                          -e -o bulk-report
+                    '''
+                }
+            }
+            post {
+                always {
+                    // Approach 1: HTML Dashboard
+                    publishHTML(target: [
+                        reportDir: 'tests-perf/jmeter-report',
+                        reportFiles: 'index.html',
+                        reportName: 'JMeter Load Test Report',
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true
+                    ])
+                    
+                    publishHTML(target: [
+                        reportDir: 'tests-perf/bulk-report',
+                        reportFiles: 'index.html',
+                        reportName: 'JMeter Bulk Test (100 Bugs)',
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true
+                    ])
+                    
+                    archiveArtifacts artifacts: 'tests-perf/*.jtl',
+                                     allowEmptyArchive: false,
+                                     fingerprint: true
+                }
+                success {
+                    echo '✅ Performance tests passed!'
+                }
+                failure {
+                    echo '❌ Performance tests failed!'
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            agent {
+                docker {
+                    image 'docker:27.5.1'
+                    reuseNode true
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0 --network=host'
+                }
+            }
+            steps {
+                sh 'docker compose down'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Performance test pipeline finished.'
+        }
+        success {
+            echo '✅ All stages completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed! Check the reports.'
+        }
+    }
+}

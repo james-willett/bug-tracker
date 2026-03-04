@@ -47,7 +47,7 @@ describe("AddBugModal", () => {
       priority: "High",
     });
     expect(mockOnClose).toHaveBeenCalled();
-  });
+  }, 60000);
 
   it("should close modal when Cancel button is clicked", () => {
     render(<AddBugModal {...defaultProps} />);

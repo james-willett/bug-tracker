@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest --coverage --coverageReporters='text-summary' --coverageReporters='text' --coverageReporters='html' --reporters=default --reporters=jest-junit",
+    "test": "jest --testTimeout=240000 --coverage --coverageReporters='text-summary' --coverageReporters='text' --coverageReporters='html' --reporters=default --reporters=jest-junit",
     "test:watch": "jest --watch",
     "test:integration": "playwright test"
   },

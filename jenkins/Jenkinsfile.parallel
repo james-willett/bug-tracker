@@ -1,0 +1,41 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Test Suite') {
+            parallel {
+                stage('Backend (Go)') {
+                    agent {
+                        docker {
+                            image 'snakee/golang-junit:1.21'
+                            reuseNode true
+                            args '-e GOCACHE=/tmp/.cache -e GOPATH=/tmp/go'
+                        }
+                    }
+                    steps {
+                        dir('bugtracker-backend') {
+                            sh 'go test -v ./...'
+                        }
+                    }
+                }
+
+                stage('Frontend (Node)') {
+                    agent {
+                        docker {
+                            // Using the official Node image instead of a Tool
+                            image 'node:20' 
+                            reuseNode true
+                        }
+                    }
+                    steps {
+                        dir('bugtracker-frontend') {
+                            // npm ci is excellent - it's faster and cleaner for CI
+                            sh 'npm ci'
+                            sh 'npm test'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

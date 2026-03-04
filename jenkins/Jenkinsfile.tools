@@ -1,0 +1,32 @@
+pipeline {
+    agent any
+
+    tools {
+        // This must match the name you gave the tool in Step 1
+        go 'go-1.25.6'
+        nodejs 'nodejs-25.5.0'
+    }
+
+    stages {
+        stage('Unit tests - Backend') {
+            steps {
+                dir('bugtracker-backend') {
+                    // This will now work because 'go' is in the PATH
+                    sh 'go test -v ./...'
+                }
+                sh 'date'
+            }
+        }
+        stage('Unit tests - Frontend') {
+            steps {
+                dir('bugtracker-frontend') {
+                    // This will now work because 'npm' is in the PATH
+                    // sh 'node -v'
+                    sh 'npm ci'
+                    sh 'npm test'
+                }
+                sh 'date'
+            }
+        }
+    }
+}

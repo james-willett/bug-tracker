@@ -73,7 +73,10 @@ describe("BugList", () => {
 
   const renderAndWaitForData = async () => {
     (getBugs as jest.Mock).mockResolvedValue(mockBugs);
-    const result = render(<BugList />);
+    let result;
+    await act(async () => {
+      result = render(<BugList />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("All Bugs")).toBeInTheDocument();
@@ -94,7 +97,9 @@ describe("BugList", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       (getBugs as jest.Mock).mockRejectedValue(new Error("Failed to fetch"));
-      render(<BugList />);
+      await act(async () => {
+        render(<BugList />);
+      });
       await waitFor(() => {
         expect(
           screen.getByText("Error: Failed to fetch bugs")
@@ -241,18 +246,25 @@ describe("BugList", () => {
     });
   });
 
-  it("displays the correct version number", () => {
-    render(<BugList />);
+  it("displays the correct version number", async () => {
+    await act(async () => {
+      render(<BugList />);
+    });
 
-    expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument();
+    });
   });
 
-  it("displays the version number in the header", () => {
-    render(<BugList />);
+  it("displays the version number in the header", async () => {
+    await act(async () => {
+      render(<BugList />);
+    });
 
-    const header = screen.getByRole("navigation");
-    const versionElement = screen.getByText(`v${APP_VERSION}`);
-
-    expect(header).toContainElement(versionElement);
+    await waitFor(() => {
+      const header = screen.getByRole("navigation");
+      const versionElement = screen.getByText(`v${APP_VERSION}`);
+      expect(header).toContainElement(versionElement);
+    });
   });
 });

@@ -1,0 +1,199 @@
+pipeline {
+    agent any
+
+    // tools {
+        // This must match the name you gave the tool in Step 1
+    //     go 'go-1.25.6'
+    // }
+
+    stages {
+//         stage('Prepare Environment') {
+//             steps {
+//                 // Create the directory and set permissions before the Docker agent starts
+//                 sh 'mkdir -p /var/jenkins_home/go-cache && chmod 777 /var/jenkins_home/go-cache'
+//                 }
+//        }
+        stage('Unit tests - Backend') {
+            agent {
+                docker {
+                    image 'snakee/golang-junit:1.21'
+                    reuseNode true
+                    // Redirect GOCACHE and GOPATH to the workspace
+                    // This ensures downloads persist between runs
+                    args '''
+                        -e GOCACHE=${WORKSPACE}/.go-cache/cache
+                        -e GOPATH=${WORKSPACE}/.go-cache/path 
+                        -v /var/jenkins_home/go-cache:/var/jenkins_home/go-cache
+                    '''
+                }
+            }
+            steps {
+                dir('bugtracker-backend') {
+                // This will now work because 'go' is in the PATH
+                // This is to execute tests without any report
+                // sh 'go test -v ./...'
+                // This is to execute tests with a test report
+                sh '''
+                    go test -v ./... 2>&1 | go-junit-report > test_results.xml
+                    # Generate coverage report
+                    go test -coverprofile=coverage.out -covermode=atomic ./...
+                    go tool cover -html=coverage.out -o coverage.html
+
+                    mkdir -p reports
+                    mv coverage.html reports/
+                '''
+                }
+                sh 'date'
+            }
+            post {
+                always {
+                    junit 'bugtracker-backend/test_results.xml'
+
+                    publishHTML( target: [
+                        reportDir: 'bugtracker-backend/reports',
+                        reportFiles: 'coverage.html',
+                        reportName: 'Backend Coverage Report'
+                        ]
+                    )
+                }
+            }
+        }
+
+        stage('Unit tests - Frontend'){
+            agent {
+                docker {
+                    image 'node:20-alpine'
+                    reuseNode true
+                    // Redirect npm cache to the workspace to avoid permission issues
+                    args '-e npm_config_cache=${WORKSPACE}/.npm-cache'
+                    // This ensures downloads persist between runs
+                    // args '-v /var/jenkins_home/npm-cache:/.npm -e npm_config_cache=/.npm'
+                }
+            }
+
+            steps {
+                dir('bugtracker-frontend') {
+                    sh '''
+                    # Forcefully remove node_modules if it exists
+                    # This bypasses the npm 'rmdir' struggle
+                    rm -rf node_modules
+                    npm ci
+                    npm test
+
+                    mkdir -p reports
+                    mv coverage reports/
+                    '''
+                }
+            }
+            // post actions after frontend tests
+            post {
+                always {
+                    junit 'bugtracker-frontend/test-results.xml'
+                    publishHTML(target: [
+                        reportDir: 'bugtracker-frontend/reports/coverage',
+                        reportFiles: 'index.html',
+                        reportName: 'Frontend Coverage Report'
+                        ]
+                    )
+                }
+            }
+        }
+        stage('Launch Application') {
+            agent {
+                docker {
+                    image 'docker:27.5.1'
+                    reuseNode true
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0'
+                }
+            }
+
+            steps{
+                sh 'docker compose up --build -d'
+
+            }
+        }
+        stage('API tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0 --network=host'
+                }
+            }
+            steps {
+                dir('tests-api') {
+                    // wait 30 secs to application to start
+                    sh 'npx wait-port http://localhost:8080/api/health -t 30000'
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+            // Publish API test results
+            post {
+                always {
+                    junit 'tests-api/test-results/results.xml'
+                    publishHTML(target: [
+                        reportDir: 'tests-api/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright API Test Report'
+                    ])
+                }
+            }
+        }
+
+        stage('E2E Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0 --network=host'
+                }
+            }
+            steps {
+                dir('tests-e2e') {
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+        }
+
+        stage('Maintenance: Cache Check') {
+            steps {
+                script {
+                    // Check size of the caches in Megabytes
+                    // // 2000000 KB is roughly 2G
+                    sh '''
+                      CACHE_SIZE=$(du -s ${WORKSPACE}/.go-cache ${WORKSPACE}/.npm-cache 2>/dev/null | awk '{sum += $1} END {print sum}')
+                      echo "Current Cache Size: ${CACHE_SIZE} KB"
+                      if [ "${CACHE_SIZE}" -gt 2000000 ]; then
+                        echo "Cache limit exceeded. Clearing caches..."
+                        rm -rf ${WORKSPACE}/.go-cache/*
+                        rm -rf ${WORKSPACE}/.npm-cache/*
+                      else
+                        echo "Cache size is within limits."
+                      fi
+                    '''
+                }
+            }
+        }
+    }
+    // The POST block: This runs after the stages are finished
+    post {
+        always {
+            echo 'Pipeline finished. Cleaning up workspace...'
+            // This clears the workspace to prevent disk bloat
+            // but you might want to remove this if you want to keep caches
+            // cleanWs() 
+        }
+        success {
+            echo 'Build Successful! Sending notification...'
+            cleanWs() 
+
+        }
+        failure {
+            echo 'Build Failed! Check logs for permission or test errors.'
+            cleanWs() 
+
+        }
+    }
+}
