@@ -2,26 +2,40 @@ FROM golang:1.21-alpine
 
 WORKDIR /app
 
-# Create mount point directory with proper permissions
+# Create data directory
 RUN mkdir -p /data && chmod 777 /data
 
-# Install wget for healthcheck
-RUN apk add --no-cache wget
+# Alpine mirrors → HTTP (бо TLS у твоїй мережі зламаний)
+RUN sed -i 's/https/http/' /etc/apk/repositories
 
-# Copy go mod files
+# Install tools
+RUN apk update \
+    && apk add --no-cache ca-certificates git wget \
+    && update-ca-certificates
+
+# Go should use system CA (safe)
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV GODEBUG=x509roots=1
+
+# Copy go.mod/sum first (cache layer)
 COPY go.mod go.sum ./
 
-# Download dependencies
+# TLS inside GitHub broken → disable verification for git
+ENV GIT_SSL_NO_VERIFY=1
+
+# Avoid Go proxy HTTPS
+ENV GOPROXY=direct
+ENV GOSUMDB=off
+ENV GOINSECURE=*
+
+# Download modules
 RUN go mod download
 
-# Copy source code
+# Copy the rest of backend code
 COPY . .
 
-# Build the application
-RUN go build -o main cmd/bugtracker/main.go
+# Build static binary (required for Alpine)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main cmd/bugtracker/main.go
 
-# Expose port 8080
 EXPOSE 8080
-
-# Run the binary
-CMD ["./main"] 
+CMD ["./main"]
