@@ -1,26 +1,20 @@
-# ---- Base image ----
-FROM node:20
-
+FROM node:20-alpine
 
 WORKDIR /app
 
-
 COPY package*.json ./
 
-
-RUN if [ -f package-lock.json ]; then \
-      npm ci --omit=optional; \
-    else \
-      npm install --omit=optional; \
-    fi
-
+RUN npm install
 
 COPY . .
 
-RUN npm install --omit=optional
+# Accept a build argument, needed for deploying on Fly.io
+ARG NEXT_PUBLIC_API_URL
 
+RUN echo "test-results.xml" >> .dockerignore
+
+RUN npm run build
 
 EXPOSE 3000
 
-
-CMD ["npm", "start"]
+CMD ["npm", "start"] 
