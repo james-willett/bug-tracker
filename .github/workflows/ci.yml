@@ -43,8 +43,8 @@ jobs:
                 
             - name: Publish Frontend Test Results
               uses: dorny/test-reporter@v3
-              if: always() # Ensure this runs even if tests fail
+              if: always() 
               with:
                 name: Frontend Unit Tests Report
-                path: ./bugtracker-frontend/test-results.xml
+                path: bugtracker-frontend/test-results.xml
                 reporter: jest-junit
