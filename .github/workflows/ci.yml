@@ -31,7 +31,7 @@ jobs:
             - name: Set up Node.js
               uses: actions/setup-node@v5
               with:
-                node-version: '20'
+                node-version: '22'
                 cache: 'npm'
                 cache-dependency-path: bugtracker-frontend/package-lock.json
 
@@ -42,7 +42,7 @@ jobs:
                 npm test
                 
             - name: Publish Frontend Test Results
-              uses: dorny/test-reporter@v2
+              uses: dorny/test-reporter@v3
               if: always() # Ensure this runs even if tests fail
               with:
                 name: Frontend Unit Tests Report
