@@ -121,7 +121,7 @@ jobs:
                     ${{ needs.unit-test-frontend.outputs.coverage }}
                     ```
                     
-    api-tests:
+    api-e2e-tests:
       needs: [unit-test-backend, unit-test-frontend]
       runs-on: ubuntu-latest
 
@@ -138,6 +138,15 @@ jobs:
           working-directory: ./tests-api
           run: |
             npm ci
+            npx playwright test
+
+        - name: Run end-to-end tests
+          working-directory: ./tests-e2e
+          env:
+            CI: "1"            
+          run: |
+            npm ci
+            npm playwright install@latest
             npx playwright test
 
         - name: Shut Down Application
