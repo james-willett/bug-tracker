@@ -72,10 +72,13 @@ func createServer() *http.Server {
 			"http://localhost:3000",
 			"https://bugtracker-staging-jameswillett.fly.dev",
 			"https://bugtracker-jameswillett.fly.dev",
+			"https://bugtracker-matiasbarluenga3.fly.dev",
+			"https://bugtracker-backend-staging-matiasbarluenga.fly.dev",
+			"https://bugtracker-staging-matiasbarluenga.fly.dev",
 		},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"*"},
-		ExposedHeaders: []string{"Content-Length"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"Content-Length"},
 		AllowCredentials: true,
 	})
 
