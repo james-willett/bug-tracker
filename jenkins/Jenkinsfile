@@ -199,6 +199,40 @@ pipeline {
             
 
         }
+
+        stage('Post Deployment Test'){
+            when {
+                expression{
+                    return env.GIT_BRANCH == 'origin/main'
+                }
+            }
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0'
+                }
+            }
+            environment {
+                PLAYWRIGHT_TEST_BASE_URL = "https://bugtracker-staging-matiasbarluenga.fly.dev/"
+            }
+            steps {
+                dir('tests-e2e'){
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+            post {
+                always {
+                    junit 'tests-e2e/test-results/results.xml'
+                    publishHTML target: [
+                        reportDir:'tests-e2e/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright Post Deployment Test Report'
+                    ]
+                }
+            }
+        }
     }
     post {
         always {
