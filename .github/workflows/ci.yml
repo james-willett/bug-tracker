@@ -225,7 +225,7 @@ jobs:
 
   deploy-staging:
     needs: [api-e2e-perf-tests]
-    # if: github.ref == 'refs/head/main'
+    if: github.ref == 'refs/head/main'
     runs-on: ubuntu-latest
 
     steps:
@@ -248,7 +248,7 @@ jobs:
 
   post-deployment-tests:
     needs: deploy-staging
-    # if: github.ref == 'refs/head/main'
+    if: github.ref == 'refs/head/main'
     runs-on: ubuntu-latest
 
     steps:
