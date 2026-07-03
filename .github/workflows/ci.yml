@@ -226,3 +226,26 @@ jobs:
             name: E2E Tests Report
             path: ./tests-api/test-results/results.xml
             reporter: jest-junit
+
+    deploy-staging:
+      needs: [api-e2e-perf-tests]
+      # if: github.ref == 'refs/head/main'
+      runs-on: ubuntu-latest
+
+      steps:
+        - uses: actions/checkout@v4
+
+        - name: Setup Flyctl
+          uses: superfly/flyctl-actions/setup-flyctl@master
+
+        - name: Deploy Backend
+          env:
+            FLY_API_TOKEN: ${{secrets.FLY_API_TOKEN}}
+          working-directory: ./bugtracker-backend
+          run: flyctl deploy -c fly.staging.toml --remote-only --depot=false
+
+        - name: Deploy Frontend
+          env:
+            FLY_API_TOKEN: ${{secrets.FLY_API_TOKEN}}
+          working-directory: ./bugtracker-frontend
+          run: flyctl deploy -c fly.staging.toml --remote-only --depot=false

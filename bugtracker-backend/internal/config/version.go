@@ -1,3 +1,3 @@
 package config
 
-const Backend_Version = "1.0.3"
+const Backend_Version = "1.0.4"
