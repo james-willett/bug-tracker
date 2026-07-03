@@ -1,0 +1,280 @@
+pipeline {
+    agent any
+
+    environment {
+        GOCACHE = '/tmp/go-build-cache'
+        GOPATH  = '/tmp/go-path'
+    }
+
+    stages {
+        stage ('Execute Unit Tests'){
+            parallel {
+                stage('Unit tests - backend') {
+                    agent {
+                        docker {
+                            image 'snakee/golang-junit:1.21'
+                            reuseNode true
+                        }
+                    }
+                    steps {
+                        dir('bugtracker-backend') {
+                            sh '''
+                            go test -v ./... 2>&1 | go-junit-report > test-results.xml
+
+                            #Generate coverage report 
+                            go test -coverprofile='coverage.out' -covermode=atomic ./... 
+                            go tool cover -html='coverage.out' -o coverage.html
+
+                            mkdir -p reports
+                            mv coverage.html reports/
+                            '''
+                        }
+                    }
+                    post{
+                        always {
+                            junit 'bugtracker-backend/test-results.xml'
+                            publishHTML target: [
+                                reportDir: 'bugtracker-backend/reports',
+                                reportFiles: 'coverage.html',
+                                reportName: 'Backend Coverage Report'
+                            ]
+                        }
+                    }
+                }
+                stage('Unit Tests - Frontend') {
+                    agent {
+                        docker {
+                            image 'node:20-alpine'
+                            reuseNode true
+                        }
+                    }
+                    steps{
+                        dir('bugtracker-frontend') {
+                            sh '''
+                            npm ci
+                            npm test
+                            mkdir -p reports
+                            mv coverage reports/
+                            '''
+                        }                
+                    }
+                    post{
+                        always {
+                            junit 'bugtracker-frontend/test-results.xml'
+                            publishHTML target: [
+                                reportDir: 'bugtracker-frontend/reports/coverage',
+                                reportFiles: 'index.html',
+                                reportName: 'Frontend Coverage Report'
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Launch Application'){
+            agent {
+                docker {
+                    image 'docker:27.5.1'
+                    reuseNode true
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0'
+                }
+            }
+            steps {
+                sh 'docker compose up --build -d'
+            }
+        }
+
+        stage('API Tests'){
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0 --network=host'
+                }
+            }
+            steps {
+                dir('tests-api') {
+                    sh 'npx wait-port http://localhost:8080/api/health -t 30000'
+
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+            post {
+                always {
+                    junit 'tests-api/test-results/results.xml'
+                    publishHTML target :[
+                        reportDir: 'tests-api/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright API Test Report'
+                    ]
+                }
+            }
+        }
+        stage('E2E Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0 --network=host'
+                }
+            }
+            steps {
+                dir('tests-e2e'){
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+            post {
+                always {
+                    junit 'tests-e2e/test-results/results.xml'
+                    publishHTML target: [
+                        reportDir:'tests-e2e/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright E2E Test Report'
+                    ]
+                }
+            }
+        }
+        stage('Performance Tests with K6'){
+            agent {
+                docker {
+                    image 'grafana/k6:0.45.0'
+                    reuseNode true
+                    args '--network=host -u root --entrypoint=""'
+                }
+            }
+            steps {
+                dir('tests-perf') {
+                    sh 'k6 run script.js'
+                }
+            }
+            post {
+                always {
+                    publishHTML target: [
+                        reportDir: 'tests-perf',
+                        reportFiles: 'perf-results.html',
+                        reportName: 'K6 Performance Test Results'
+                    ]
+                }
+            }
+        }
+
+        stage('Deploy Staging'){
+            when {
+                expression{
+                    return env.GIT_BRANCH == 'origin/main'
+                }
+            }
+            environment{
+                FLY_API_TOKEN = credentials('FLY_API_TOKEN')
+                FLYCTL_INSTALL = "${env.WORKSPACE.replaceAll(' ', '')}/.fly"
+                PATH = "$FLYCTL_INSTALL/bin:$PATH"
+                HOME = "${WORKSPACE}"
+            }
+            stages {
+                stage('Install Flyctl'){
+                    steps {
+                        sh 'mkdir -p $FLYCTL_INSTALL'
+                        sh 'curl -L https://fly.io/install.sh | sh'
+                        sh 'flyctl version'
+                    }
+            }
+                stage('Deploy Backend'){
+                    steps{
+                        dir('bugtracker-backend'){
+                            sh 'flyctl deploy -c fly.staging.toml --depot=false --remote-only'
+                        }
+                    }
+                }
+                stage('Deploy Frontend'){
+                    steps{
+                        dir('bugtracker-frontend'){
+                            sh 'flyctl deploy -c fly.staging.toml --depot=false --remote-only'
+                        }
+                    }
+                }
+            }
+            
+
+        }
+
+        stage('Post Deployment Test'){
+            when {
+                expression{
+                    return env.GIT_BRANCH == 'origin/main'
+                }
+            }
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0'
+                }
+            }
+            environment {
+                PLAYWRIGHT_TEST_BASE_URL = "https://bugtracker-staging-matiasbarluenga.fly.dev/"
+            }
+            steps {
+                dir('tests-e2e'){
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+            post {
+                always {
+                    junit 'tests-e2e/test-results/results.xml'
+                    publishHTML target: [
+                        reportDir:'tests-e2e/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright Post Deployment Test Report'
+                    ]
+                }
+            }
+        }
+
+        stage('Deploy Production'){
+            when {
+                expression{
+                    return env.GIT_BRANCH == 'origin/main'
+                }
+            }
+            environment{
+                FLY_API_TOKEN = credentials('FLY_API_TOKEN')
+                FLYCTL_INSTALL = "${env.WORKSPACE.replaceAll(' ', '')}/.fly"
+                PATH = "$FLYCTL_INSTALL/bin:$PATH"
+                HOME = "${WORKSPACE}"
+            }
+            stages {
+                stage('Install Flyctl'){
+                    steps {
+                        sh 'mkdir -p $FLYCTL_INSTALL'
+                        sh 'curl -L https://fly.io/install.sh | sh'
+                        sh 'flyctl version'
+                    }
+            }
+                stage('Deploy Backend'){
+                    steps{
+                        dir('bugtracker-backend'){
+                            sh 'flyctl deploy -c fly.toml --depot=false --remote-only'
+                        }
+                    }
+                }
+                stage('Deploy Frontend'){
+                    steps{
+                        dir('bugtracker-frontend'){
+                            sh 'flyctl deploy -c fly.toml --depot=false --remote-only'
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
