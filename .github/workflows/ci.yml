@@ -1,251 +1,284 @@
 name: CI
 
 on:
-    push:
-        branches:
-            - main
-    pull_request:
-            branches:
-            - main
-    workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-    unit-test-backend:
-        runs-on: ubuntu-latest
-        outputs:
-            coverage: ${{steps.test-backend.outputs.report}}
-        steps:
-            - uses: actions/checkout@v5
+  unit-test-backend:
+    runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{steps.test-backend.outputs.report}}
+    steps:
+      - uses: actions/checkout@v5
 
-            - name: Set up Go
-              uses: actions/setup-go@v6
-              with:
-                go-version: '1.21'
-                cache-dependency-path: bugtracker-backend/go.sum
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.21"
+          cache-dependency-path: bugtracker-backend/go.sum
 
-            - name: Install go-junit-report
-              run: go install github.com/jstemmer/go-junit-report@latest
+      - name: Install go-junit-report
+        run: go install github.com/jstemmer/go-junit-report@latest
 
-            - name: Execute Backend Unit Tests
-              id: test-backend
-              working-directory: ./bugtracker-backend
-              run: |
-                go test -json -coverprofile='coverage.out' -covermode=atomic ./... 
-                go tool cover -func='coverage.out' > coverage.txt
+      - name: Execute Backend Unit Tests
+        id: test-backend
+        working-directory: ./bugtracker-backend
+        run: |
+          go test -json -coverprofile='coverage.out' -covermode=atomic ./... 
+          go tool cover -func='coverage.out' > coverage.txt
 
-                echo "## Go Test Coverage Report" >> $GITHUB_STEP_SUMMARY
-                echo '```' >> $GITHUB_STEP_SUMMARY
-                cat coverage.txt >> $GITHUB_STEP_SUMMARY
-                echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "## Go Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat coverage.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
-                echo "report<<EOF" >> $GITHUB_OUTPUT
-                cat coverage.txt >> $GITHUB_OUTPUT
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          cat coverage.txt >> $GITHUB_OUTPUT
 
-                echo "EOF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-                go test -v ./... 2>&1 | go-junit-report > test-results.xml
+          go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
-            - name: Publish Backend Test Results
-              uses: dorny/test-reporter@v3
-              if: always()
-              with:
-                name: Backend Unit Tests Report
-                path: bugtracker-backend/test-results.xml
-                reporter: jest-junit
+      - name: Publish Backend Test Results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Backend Unit Tests Report
+          path: bugtracker-backend/test-results.xml
+          reporter: jest-junit
 
-    unit-test-frontend:       
-        runs-on: ubuntu-latest
-        outputs:
-            coverage: ${{steps.test-frontend.outputs.report}}
-        steps:
-            - uses: actions/checkout@v5
+  unit-test-frontend:
+    runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{steps.test-frontend.outputs.report}}
+    steps:
+      - uses: actions/checkout@v5
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v5
-              with:
-                node-version: '22'
-                cache: 'npm'
-                cache-dependency-path: bugtracker-frontend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: bugtracker-frontend/package-lock.json
 
-            - name: Execute Frontend Unit Tests
-              id: test-frontend
-              working-directory: ./bugtracker-frontend
-              run: |
-                npm ci
-                npm test | tee full_output.txt
+      - name: Execute Frontend Unit Tests
+        id: test-frontend
+        working-directory: ./bugtracker-frontend
+        run: |
+          npm ci
+          npm test | tee full_output.txt
 
-                echo "## Frontend Test Coverage Report" >> $GITHUB_STEP_SUMMARY
-                echo '```' >> $GITHUB_STEP_SUMMARY
-                cat full_output.txt >> $GITHUB_STEP_SUMMARY
-                echo '```' >> $GITHUB_STEP_SUMMARY
-
-                
-                echo "report<<EOF" >> $GITHUB_OUTPUT
-                cat full_output.txt >> $GITHUB_OUTPUT
-                echo "EOF" >> $GITHUB_OUTPUT
+          echo "## Frontend Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat full_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
 
-                
-            - name: Publish Frontend Test Results
-              uses: dorny/test-reporter@v3
-              if: always() 
-              with:
-                name: Frontend Unit Tests Report
-                path: bugtracker-frontend/test-results.xml
-                reporter: jest-junit
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          cat full_output.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-    create-coverage-comment:
-        if: github.event_name == 'pull_request'
-        needs: [unit-test-backend, unit-test-frontend]
-        runs-on: ubuntu-latest
-        permissions:
-            pull-requests: write
-        steps:
-            - name: Create Backend Coverage Comment
-              uses: peter-evans/create-or-update-comment@v4
-              with:
-                issue-number: ${{github.event.pull_request.number}}
-                body: |
-                    ## Backend Test Coverage Report
-                    ```
-                    ${{ needs.unit-test-backend.outputs.coverage }}
-                    ```
+      - name: Publish Frontend Test Results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Frontend Unit Tests Report
+          path: bugtracker-frontend/test-results.xml
+          reporter: jest-junit
 
-            - name: Create Frontend Coverage Comment
-              uses: peter-evans/create-or-update-comment@v4
-              with:
-                issue-number: ${{github.event.pull_request.number}}
-                body: |
-                    ## Frontend Test Coverage Report
-                    ```
-                    ${{ needs.unit-test-frontend.outputs.coverage }}
-                    ```
-                    
-    api-e2e-perf-tests:
-      needs: [unit-test-backend, unit-test-frontend]
-      runs-on: ubuntu-latest
+  create-coverage-comment:
+    if: github.event_name == 'pull_request'
+    needs: [unit-test-backend, unit-test-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Create Backend Coverage Comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{github.event.pull_request.number}}
+          body: |
+            ## Backend Test Coverage Report
+            ```
+            ${{ needs.unit-test-backend.outputs.coverage }}
+            ```
 
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v5
+      - name: Create Frontend Coverage Comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{github.event.pull_request.number}}
+          body: |
+            ## Frontend Test Coverage Report
+            ```
+            ${{ needs.unit-test-frontend.outputs.coverage }}
+            ```
 
-        - name: Launch Application 
-          run: |
-            docker compose up --build -d
-            npx wait-port http://localhost:8080/api/health -t 30000
+  api-e2e-perf-tests:
+    needs: [unit-test-backend, unit-test-frontend]
+    runs-on: ubuntu-latest
 
-        - name: Run API Tests
-          working-directory: ./tests-api
-          run: |
-            npm ci
-            npx playwright test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-        - name: Run end-to-end tests
-          working-directory: ./tests-e2e
-          env:
-            CI: "1"            
-          run: |
-            npm ci
-            npx playwright install
-            npx playwright test
+      - name: Launch Application
+        run: |
+          docker compose up --build -d
+          npx wait-port http://localhost:8080/api/health -t 30000
 
-        - name: Setup k6
-          uses: grafana/setup-k6-action@v1
+      - name: Run API Tests
+        working-directory: ./tests-api
+        run: |
+          npm ci
+          npx playwright test
 
-        - name: Run Performance Tests
-          uses: grafana/run-k6-action@v1
-          with: 
-            path: ./tests-perf/script.js
-            flags: --out json=summary.json 
+      - name: Run end-to-end tests
+        working-directory: ./tests-e2e
+        env:
+          CI: "1"
+        run: |
+          npm ci
+          npx playwright install
+          npx playwright test
 
-        - name: Shut Down Application
-          run: docker compose down
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
 
-        - name: Upload API Test Results
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: api-test-results
-            path: ./tests-api/test-results/
-            retention-days: 30
+      - name: Run Performance Tests
+        uses: grafana/run-k6-action@v1
+        with:
+          path: ./tests-perf/script.js
+          flags: --out json=summary.json
 
-        - name: Upload API Test Playwright Report
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: api-test-playwright-report
-            path: ./tests-api/playwright-report/
-            retention-days: 30
+      - name: Shut Down Application
+        run: docker compose down
 
-        - name: Upload E2E Test Results
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: e2e-test-results
-            path: ./tests-e2e/test-results
-            retention-days: 30
+      - name: Upload API Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: ./tests-api/test-results/
+          retention-days: 30
 
-            
-        - name: Upload E2E Test Playwright Report
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: e2e-test-playwright-report
-            path: ./tests-e2e/playwright-report/
-            retention-days: 30
-          
-        - name: Upload Performance Raw Results
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: performance-raw-results
-            path: summary.json
-            retention-days: 30
+      - name: Upload API Test Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-playwright-report
+          path: ./tests-api/playwright-report/
+          retention-days: 30
 
-        - name: Upload Performance HTML Report
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: performance-report
-            path: perf-results.html
-            retention-days: 30
+      - name: Upload E2E Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: ./tests-e2e/test-results
+          retention-days: 30
 
+      - name: Upload E2E Test Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-playwright-report
+          path: ./tests-e2e/playwright-report/
+          retention-days: 30
 
-        - name: Publish API Test Results
-          uses: dorny/test-reporter@v3
-          if: always()
-          with:
-            name: API Tests Report
-            path: ./tests-api/test-results/results.xml
-            reporter: jest-junit
+      - name: Upload Performance Raw Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-raw-results
+          path: summary.json
+          retention-days: 30
 
-        - name: Publish E2E Test Results
-          uses: dorny/test-reporter@v3
-          if: always()
-          with:
-            name: E2E Tests Report
-            path: ./tests-api/test-results/results.xml
-            reporter: jest-junit
+      - name: Upload Performance HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: perf-results.html
+          retention-days: 30
 
-    deploy-staging:
-      needs: [api-e2e-perf-tests]
-      # if: github.ref == 'refs/head/main'
-      runs-on: ubuntu-latest
+      - name: Publish API Test Results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: API Tests Report
+          path: ./tests-api/test-results/results.xml
+          reporter: jest-junit
 
-      steps:
-        - uses: actions/checkout@v4
+      - name: Publish E2E Test Results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: E2E Tests Report
+          path: ./tests-api/test-results/results.xml
+          reporter: jest-junit
 
-        - name: Setup Flyctl
-          uses: superfly/flyctl-actions/setup-flyctl@master
+  deploy-staging:
+    needs: [api-e2e-perf-tests]
+    # if: github.ref == 'refs/head/main'
+    runs-on: ubuntu-latest
 
-        - name: Deploy Backend
-          env:
-            FLY_API_TOKEN: ${{secrets.FLY_API_TOKEN}}
-          working-directory: ./bugtracker-backend
-          run: flyctl deploy -c fly.staging.toml --remote-only --depot=false
+    steps:
+      - uses: actions/checkout@v4
 
-        - name: Deploy Frontend
-          env:
-            FLY_API_TOKEN: ${{secrets.FLY_API_TOKEN}}
-          working-directory: ./bugtracker-frontend
-          run: flyctl deploy -c fly.staging.toml --remote-only  --depot=false
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy Backend
+        env:
+          FLY_API_TOKEN: ${{secrets.FLY_API_TOKEN}}
+        working-directory: ./bugtracker-backend
+        run: flyctl deploy -c fly.staging.toml --remote-only --depot=false
+
+      - name: Deploy Frontend
+        env:
+          FLY_API_TOKEN: ${{secrets.FLY_API_TOKEN}}
+        working-directory: ./bugtracker-frontend
+        run: flyctl deploy -c fly.staging.toml --remote-only  --depot=false
+
+  post-deployment-tests:
+    needs: deploy-staging
+    # if: github.ref == 'refs/head/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Playwright
+        working-directory: ./tests-e2e
+        run: |
+          npm ci
+          npx playwright install
+
+      - name: Run Post Deployment Tests
+        working-directory: ./tests-e2e
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: "https://bugtracker-staging-matiasbarluenga.fly.dev/"
+        run: |
+          npx playwright test
+
+      - name: Upload Post Deployment Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deployment-test-playwright-report
+          path: ./tests-e2e/playwright-report
+          retention-days: 30
+
+      - name: Publish Post Deployment Test REsults
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: post Deployment Test REport
+          path: ./tests-e2e/test-results/results.xml
+          reporter: jest-junit
