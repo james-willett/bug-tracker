@@ -5,7 +5,7 @@ test("Bug creation and deletion flow", async ({ page }) => {
     console.log(`Browser console [${msg.type()}]: ${msg.text()}`);
   });
 
-  console.log("Starting test...");
+  console.log("Starting test......");
 
   await page.goto("/");
   console.log("Navigated to homepage");

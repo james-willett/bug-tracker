@@ -1,0 +1,183 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Unit Tests - Backend') {
+            agent {
+                docker {
+                    image 'snakee/golang-junit:1.21'
+                    reuseNode true
+                    args '-u root'
+                }
+            }
+
+            steps {
+                dir('bugtracker-backend') {
+                    sh '''
+                        export GOCACHE=/tmp/.go-cache
+                        mkdir -p /tmp/.go-cache
+
+                        go install gotest.tools/gotestsum@v1.11.0
+
+                        gotestsum \
+                            --junitfile test-results.xml \
+                            --format testname \
+                            -- -v ./...
+
+                        go test -coverprofile=coverage.out -covermode=atomic ./...
+                        go tool cover -html=coverage.out -o coverage.html
+
+                        mkdir -p reports
+                        mv coverage.html reports/
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    junit 'bugtracker-backend/test-results.xml'
+
+                    publishHTML target: [
+                        reportDir: 'bugtracker-backend/reports',
+                        reportFiles: 'coverage.html',
+                        reportName: 'Backend Coverage Report',
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        allowMissing: true
+                    ]
+                }
+            }
+        }
+
+        stage('Unit Tests - Frontend') {
+            agent {
+                docker {
+                    image 'node:20-alpine'
+                    reuseNode true
+                }
+            }
+
+            steps {
+                dir('bugtracker-frontend') {
+                    sh '''
+                      npm ci
+    npm test
+
+    rm -rf reports
+    mkdir -p reports
+
+    cp -r coverage/. reports/
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    publishHTML target: [
+                         reportDir: 'bugtracker-frontend/reports',
+    reportFiles: 'index.html',
+    reportName: 'Frontend Coverage Report',
+    keepAll: true,
+    alwaysLinkToLastBuild: true,
+    allowMissing: false
+                    ]
+                }
+            }
+        }
+
+        stage('Launch Application') {
+            agent {
+                docker {
+                    image 'docker:27.5.1'
+                    reuseNode true
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0'
+                }
+            }
+
+            steps {
+                sh 'docker compose up --build -d'
+            }
+        }
+
+        stage('API Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0 --network=host'
+                }
+            }
+            steps {
+                dir('tests-api'){
+                    sh 'npx wait-port http://localhost:8080/api/health -t 30000'
+                    sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+
+            post {
+                always {
+                    junit 'tests-api/test-results/results.xml'
+                    publishHTML target: [
+                                         reportDir: 'tests-api/playwright-report',
+    reportFiles: 'index.html',
+    reportName: 'Playwright API Test Report'
+                    ]
+                }
+            }
+        }
+
+                stage('E2E Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
+                    reuseNode true
+                    args '-u 0 --network=host'
+                }
+            }
+            steps {
+                dir('tests-e2e'){
+                     sh 'npm ci'
+                    sh 'npx playwright test'
+                }
+            }
+
+            post {
+                always {
+                    junit 'tests-api/test-results/results.xml'
+                    publishHTML target: [
+                                         reportDir: 'tests-e2e/playwright-report',
+    reportFiles: 'index.html',
+    reportName: 'Playwright E2E Test Report'
+                    ]
+                }
+            }
+        }
+
+        
+                stage('Performance Tests') {
+            agent {
+                docker {
+                    image 'grafana/k6:latest'
+                    reuseNode true
+                    args '--network=host -u root --entrypoint=""'
+                }
+            }
+            steps {
+                dir('tests-perf'){
+                   sh 'k6 run script.js'
+                }
+            }
+
+            post {
+                always {
+                    publishHTML target: [
+                                         reportDir: 'tests-perf',
+    reportFiles: 'perf-results.html',
+    reportName: 'Performance Test Report'
+                    ]
+                }
+            }
+        }
+    }
+}
