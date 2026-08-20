@@ -1,0 +1,559 @@
+pipeline {
+
+    // ─────────────────────────────────────────────────────────────
+    // agent any : Jenkins peut exécuter ce pipeline sur n'importe
+    // quel agent (nœud) disponible dans le cluster Jenkins.
+    // Chaque stage peut ensuite redéfinir son propre agent (Docker).
+    // ─────────────────────────────────────────────────────────────
+    agent any
+
+    stages {
+
+        // ============================================================
+        // STAGE 1 : Running Unit Tests
+        // On utilise "parallel" pour exécuter les tests backend et
+        // frontend en même temps → gain de temps significatif.
+        // Si l'un des deux échoue, le stage global est marqué FAILED.
+        // ============================================================
+        stage('Running Unit Tests') {
+
+            parallel {
+
+                // ====================================================
+                // SOUS-STAGE : Unit Test - Backend (Golang)
+                // ====================================================
+                stage('Unit Test - Backend') {
+
+                    agent {
+                        docker {
+                            // Image Docker contenant Go + l'outil go-junit-report
+                            // qui convertit la sortie "go test -v" en XML JUnit
+                            // (format standard lisible par Jenkins).
+                            image 'snakee/golang-junit:1.21'
+
+                            // reuseNode true : le conteneur Docker tourne sur
+                            // le même nœud Jenkins que le pipeline principal,
+                            // ce qui lui donne accès au même workspace sur disque.
+                            // Sans ça, Jenkins lancerait le conteneur sur un
+                            // nœud différent et le workspace serait vide.
+                            reuseNode true
+                        }
+                    }
+
+                    environment {
+                        // HOME pointe vers le workspace Jenkins.
+                        // Par défaut, le conteneur Go n'a pas de $HOME
+                        // accessible en écriture → certains outils Go
+                        // essaient d'écrire dans "/" et obtiennent
+                        // "permission denied". On redirige tout vers
+                        // le workspace où Jenkins a les droits.
+                        HOME = "${WORKSPACE}"
+
+                        // GOCACHE : dossier de cache des compilations Go.
+                        // Go y stocke les objets compilés pour accélérer
+                        // les builds suivants. Doit être accessible en R/W.
+                        GOCACHE = "${WORKSPACE}/.cache/go-build"
+
+                        // GOPATH : chemin racine de l'environnement Go
+                        // (modules téléchargés, binaires installés…).
+                        // On le place dans le workspace pour les mêmes
+                        // raisons de permissions.
+                        GOPATH = "${WORKSPACE}/.cache/go-path"
+                    }
+
+                    steps {
+
+                        // dir('bugtracker-backend') : change le répertoire
+                        // courant vers le sous-dossier "bugtracker-backend"
+                        // du workspace. Toutes les commandes sh ci-dessous
+                        // s'exécutent depuis ce dossier.
+                        dir('bugtracker-backend') {
+
+                            sh '''
+                                # Créer les dossiers de cache s'ils n'existent pas.
+                                # "-p" crée aussi les parents manquants sans erreur.
+                                mkdir -p "$GOCACHE"
+                                mkdir -p "$GOPATH"
+
+                                # Dossier pour le rapport HTML de couverture.
+                                mkdir -p reports
+
+                                # Dossier pour le rapport JUnit XML (résultats de tests).
+                                mkdir -p test-results
+
+                                echo "Running Backend Unit Tests..."
+
+                                # "go test -v ./..." : lance tous les tests Go
+                                # du projet (-v = verbose, ./... = récursif).
+                                # Le pipe "|" envoie la sortie vers go-junit-report
+                                # qui la convertit en XML JUnit standard.
+                                # ">" écrit le résultat dans le fichier XML.
+                                go test -v ./... | go-junit-report > test-results/test-results.xml
+
+                                echo "Generating Coverage..."
+
+                                # "go test -coverprofile=coverage.out" : relance
+                                # les tests en instrumentant le code pour mesurer
+                                # quelles lignes sont exécutées (couverture de code).
+                                # "-covermode=atomic" : mode thread-safe (recommandé
+                                # pour les tests parallèles).
+                                # "coverage.out" est un fichier texte brut Go.
+                                go test -coverprofile=coverage.out -covermode=atomic ./...
+
+                                # "go tool cover -html" : convertit le fichier
+                                # "coverage.out" en rapport HTML lisible par un humain.
+                                # "-o reports/coverage.html" spécifie le fichier de sortie.
+                                go tool cover -html=coverage.out -o reports/coverage.html
+                            '''
+                        }
+                    }
+
+                    post {
+
+                        // "always" : ce bloc s'exécute qu'il y ait succès ou échec,
+                        // pour s'assurer que les rapports sont toujours publiés.
+                        always {
+
+                            // junit : plugin Jenkins qui parse le fichier XML JUnit
+                            // et affiche les résultats (tests passés/échoués) dans
+                            // l'interface Jenkins avec graphes et historique.
+                            // "allowEmptyResults: true" : ne fait pas échouer le
+                            // stage si aucun test n'a été trouvé (utile en dev).
+                            junit allowEmptyResults: true,
+                                  testResults: 'bugtracker-backend/test-results/test-results.xml'
+
+                            // publishHTML : plugin Jenkins qui rend le rapport HTML
+                            // accessible depuis l'interface Jenkins.
+                            // allowMissing: true → ne bloque pas si le fichier manque.
+                            // alwaysLinkToLastBuild: true → lien vers le dernier build
+                            //   même si ce build-là n'a pas généré de rapport.
+                            // keepAll: true → conserver les rapports de tous les builds
+                            //   (pas seulement le dernier).
+                            publishHTML(target: [
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'bugtracker-backend/reports',  // Dossier contenant le rapport
+                                reportFiles: 'coverage.html',              // Fichier HTML à afficher
+                                reportName: 'Backend Coverage Report'      // Nom affiché dans Jenkins
+                            ])
+                        }
+                    }
+                }
+
+                // ====================================================
+                // SOUS-STAGE : Unit Test - Frontend (Node.js / React)
+                // ====================================================
+                stage('Unit Test - Frontend') {
+
+                    agent {
+                        docker {
+                            // Image officielle Node.js 20 sur Alpine Linux.
+                            // Alpine = image légère (~5 MB) idéale pour les
+                            // pipelines CI (téléchargement rapide).
+                            image 'node:20-alpine'
+
+                            // Même raison que pour le backend : partager
+                            // le workspace du nœud principal.
+                            reuseNode true
+                        }
+                    }
+
+                    steps {
+
+                        // Change le dossier courant vers "bugtracker-frontend".
+                        dir('bugtracker-frontend') {
+
+                            sh '''
+                                echo "Installing dependencies..."
+
+                                # "npm ci" (Clean Install) : installe exactement
+                                # les versions spécifiées dans package-lock.json.
+                                # Plus strict et plus rapide que "npm install"
+                                # en CI (supprime node_modules avant d'installer).
+                                npm ci
+
+                                echo "Running Frontend Unit Tests..."
+
+                                # Lance les tests définis dans package.json
+                                # (section "scripts" → "test").
+                                # Génère aussi les rapports XML et HTML de couverture
+                                # selon la configuration du projet (Vitest/Jest).
+                                npm test
+                            '''
+                        }
+                    }
+
+                    post {
+
+                        always {
+
+                            // Même mécanisme que le backend : parse le XML
+                            // JUnit généré par Vitest/Jest et affiche les
+                            // résultats dans Jenkins.
+                            // "allowEmptyResults: false" : le stage ÉCHOUE
+                            // si aucun fichier de test n'est trouvé — plus
+                            // strict que le backend pour détecter les erreurs
+                            // de configuration.
+                            junit allowEmptyResults: false,
+                                  testResults: 'bugtracker-frontend/test-results.xml'
+
+                            publishHTML(target: [
+                                allowMissing: false,             // Échoue si le rapport est absent
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'bugtracker-frontend/coverage', // Généré par Vitest/Jest
+                                reportFiles: 'index.html',
+                                reportName: 'Frontend Coverage Report'
+                            ])
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================================
+        // STAGE 2 : Launch Application
+        // Démarre l'application complète (backend + frontend) via
+        // Docker Compose. Ne s'exécute que si les tests unitaires ont
+        // tous réussi (comportement par défaut de Jenkins).
+        // ============================================================
+        stage('Launch Application') {
+
+            agent {
+                docker {
+                    // "docker:28-cli" : image officielle qui contient
+                    // uniquement le client Docker (CLI) et Docker Compose,
+                    // mais PAS le daemon Docker.
+                    // On l'utilise pour piloter le daemon Docker de la
+                    // machine hôte via le socket partagé (voir args).
+                    image 'docker:28-cli'
+
+                    reuseNode true
+
+                    args '''
+                        // -v /var/run/docker.sock:/var/run/docker.sock
+                        // Monte le socket Unix du daemon Docker de l'hôte
+                        // à l'intérieur du conteneur. Cela permet au client
+                        // Docker (dans le conteneur) d'envoyer des commandes
+                        // au daemon Docker de la machine hôte → c'est le
+                        // pattern "Docker-in-Docker par socket partagé" (DooD).
+                        // Sans ce montage, le conteneur ne peut pas lancer
+                        // d'autres conteneurs.
+                        //
+                        // --group-add 2375
+                        // Le socket /var/run/docker.sock appartient au groupe
+                        // "docker" (GID 2375 sur cette machine).
+                        // L'utilisateur du conteneur (non-root) n'appartient
+                        // pas à ce groupe par défaut → "permission denied".
+                        // --group-add l'ajoute dynamiquement sans modifier
+                        // l'image Docker. Le GID exact a été trouvé avec :
+                        //   docker exec -it jenkins-docker getent group docker
+                    '''
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --group-add 2375'
+                }
+            }
+
+            environment {
+                // HOME redéfini vers le workspace Jenkins.
+                // Sans ça, le client Docker CLI tente d'écrire sa config
+                // (config.json) dans le HOME par défaut du conteneur ("/")
+                // → "mkdir /.docker: permission denied" car "/" est read-only.
+                HOME = "${WORKSPACE}"
+
+                // DOCKER_CONFIG : chemin explicite où Docker CLI stocke
+                // sa configuration (credentials, registres…).
+                // On le place dans le workspace pour les droits d'écriture.
+                DOCKER_CONFIG = "${WORKSPACE}/.docker"
+            }
+
+            steps {
+                sh '''
+                    # Créer le dossier de config Docker AVANT toute commande
+                    # docker ou docker compose. Si on ne le fait pas ici,
+                    # Docker tente de le créer automatiquement dans "/" et
+                    # échoue avec "permission denied".
+                    mkdir -p "$DOCKER_CONFIG"
+
+                    echo "========== Docker Version =========="
+                    # Affiche la version du client et du daemon Docker.
+                    # Utile pour le debug en cas de problème de compatibilité.
+                    docker version
+
+                    echo "========== Docker Compose Version =========="
+                    # Vérifie que docker compose (v2) est bien disponible.
+                    docker compose version
+
+                    echo "Stopping previous containers..."
+
+                    # "docker compose down" : arrête et supprime tous les
+                    # conteneurs définis dans docker-compose.yml.
+                    # "|| true" : si aucun conteneur ne tourne (premier
+                    # lancement), la commande retourne une erreur → "|| true"
+                    # l'ignore et empêche le pipeline d'échouer inutilement.
+                    docker compose down || true
+
+                    echo "Starting application..."
+
+                    # "docker compose up --build -d" :
+                    # --build : reconstruit les images avant de démarrer
+                    #           (prend en compte les dernières modifications du code).
+                    # -d      : mode "detached" → les conteneurs tournent en
+                    #           arrière-plan (ne bloque pas le pipeline).
+                    docker compose up --build -d
+
+                    echo "Application started successfully."
+                '''
+            }
+        }
+
+        // ============================================================
+        // STAGE 3 : API Tests (Playwright)
+        // Teste les endpoints REST de l'API backend via Playwright.
+        // L'application doit être démarrée (stage précédent) avant
+        // de lancer ces tests.
+        // ============================================================
+        stage('API Tests') {
+
+            agent {
+                docker {
+                    // Image officielle Microsoft Playwright v1.62.0
+                    // sur Ubuntu Jammy (22.04). Contient Node.js, npm,
+                    // et tous les navigateurs Chromium/Firefox/WebKit
+                    // préinstallés + leurs dépendances système.
+                    image 'mcr.microsoft.com/playwright:v1.62.0-jammy'
+
+                    reuseNode true
+
+                    // -u 0 : exécute le conteneur en tant que root (UID 0).
+                    //   Nécessaire car certaines dépendances Playwright
+                    //   requièrent des droits élevés pour s'installer.
+                    //
+                    // --network host : le conteneur utilise directement
+                    //   le réseau de la machine hôte (pas de réseau Docker
+                    //   isolé). Ainsi "localhost:8080" dans le test pointe
+                    //   vers le backend démarré au stage précédent.
+                    //   Sans ça, "localhost" serait isolé dans le conteneur
+                    //   et le backend serait inaccessible.
+                    args '-u 0 --network host'
+                }
+            }
+
+            steps {
+                // Change le dossier courant vers le sous-projet de tests API.
+                dir('tests-api') {
+                    sh '''
+                        # "npx wait-port" : attend que le port 8080 soit
+                        # ouvert et accessible avant de lancer les tests.
+                        # Cela évite les erreurs de connexion si le backend
+                        # met quelques secondes à démarrer.
+                        # --timeout=30000 : abandon après 30 secondes si
+                        # le port ne répond pas (évite un blocage infini).
+                        npx wait-port 8080 http://localhost:8080 --timeout=30000
+
+                        echo "Running API Tests..."
+
+                        # Installe les dépendances npm définies dans
+                        # tests-api/package.json (Playwright, etc.).
+                        npm ci
+
+                        # Lance tous les tests Playwright du dossier.
+                        # Playwright utilise playwright.config.ts pour
+                        # savoir quels tests exécuter, sur quels navigateurs,
+                        # et où écrire les rapports.
+                        npx playwright test
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    // Parse le rapport XML JUnit généré par Playwright
+                    // (configuré dans playwright.config.ts avec le reporter "junit").
+                    // "allowEmptyResults: false" : le stage échoue si le
+                    // fichier XML est absent (erreur de config détectée tôt).
+                    junit allowEmptyResults: false,
+                          testResults: 'tests-api/test-results/results.xml'
+
+                    // Publie le rapport HTML interactif de Playwright
+                    // (rapport natif avec screenshots, traces, vidéos).
+                    publishHTML(target: [
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'tests-api/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright API Test Report'
+                    ])
+                }
+            }
+        }
+
+        // ============================================================
+        // STAGE 4 : Tests E2E (End-to-End)
+        // Simule un vrai utilisateur dans un navigateur : navigation,
+        // clics, formulaires, assertions sur l'UI complète.
+        // Nécessite que backend ET frontend soient accessibles.
+        // ============================================================
+        stage('Tests E2E') {
+
+            agent {
+                docker {
+                    // Même image Playwright que pour les API Tests.
+                    // Playwright pilote un vrai navigateur headless
+                    // (Chromium par défaut) pour simuler un utilisateur.
+                    image 'mcr.microsoft.com/playwright:v1.62.0-jammy'
+
+                    reuseNode true
+
+                    // Mêmes raisons que pour les API Tests :
+                    // root pour les permissions, host network pour accéder
+                    // au frontend (localhost:3000) et backend (localhost:8080).
+                    args '-u 0 --network host'
+                }
+            }
+
+            steps {
+                // Change le dossier courant vers le sous-projet de tests E2E.
+                dir('tests-e2e') {
+                    sh '''
+                        # Installe les dépendances npm du projet de tests E2E.
+                        npm ci
+
+                        echo "Waiting for backend..."
+
+                        # Attend que le port 8080 (backend) soit disponible
+                        # avant de lancer les tests E2E.
+                        # Le frontend (port 3000) est géré par la config
+                        # Playwright (baseURL dans playwright.config.ts).
+                        npx wait-port 8080 --timeout=30000
+
+                        echo "Backend is ready."
+
+                        # Lance tous les tests E2E Playwright.
+                        # Ces tests pilotent un navigateur réel et valident
+                        # les parcours utilisateurs complets (ex: créer un bug,
+                        # modifier son statut, le supprimer).
+                        npx playwright test
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    // Même pattern que les API Tests : JUnit XML + rapport HTML.
+                    junit allowEmptyResults: false,
+                          testResults: 'tests-e2e/test-results/results.xml'
+
+                    publishHTML(target: [
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'tests-e2e/playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright E2E Test Report'
+                    ])
+                }
+            }
+        }
+
+        // ============================================================
+        // STAGE 5 : Performance Tests (k6)
+        // Teste la charge et la performance de l'API :
+        // latence, throughput, taux d'erreur sous charge simulée.
+        // k6 est l'outil de test de performance de Grafana Labs.
+        // ============================================================
+        stage('Performance Tests') {
+
+            agent {
+                docker {
+                    // Image officielle k6 de Grafana.
+                    // Contient l'exécutable k6 préinstallé.
+                    // "latest" = dernière version stable.
+                    image 'grafana/k6:latest'
+
+                    reuseNode true
+
+                    // -u 0 : root pour les permissions.
+                    //
+                    // --network host : accès à localhost:8080 (backend)
+                    //   depuis le conteneur k6.
+                    //
+                    // --entrypoint="" : IMPORTANT — l'image k6 définit
+                    //   "k6" comme entrypoint par défaut, ce qui empêche
+                    //   Jenkins d'exécuter ses propres commandes shell (sh).
+                    //   En remettant l'entrypoint à vide (""), Jenkins peut
+                    //   lancer un shell normal et ensuite appeler "k6 run".
+                    args '-u 0 --network host --entrypoint=""'
+                }
+            }
+
+            steps {
+                // Change le dossier courant vers le sous-projet de tests de perf.
+                dir('tests-perf') {
+                    sh '''
+                        echo "Running Performance Tests..."
+
+                        # "k6 run script.js" : exécute le scénario de charge
+                        # défini dans script.js.
+                        # script.js définit :
+                        #   - le nombre d'utilisateurs virtuels (VUs)
+                        #   - la durée du test
+                        #   - les requêtes HTTP à envoyer
+                        #   - les seuils de performance (thresholds) à respecter
+                        # k6 génère un rapport HTML (perf-results.html) si configuré.
+                        k6 run script.js
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    // Publie le rapport HTML de performance généré par k6.
+                    // Contrairement aux stages précédents, pas de JUnit XML
+                    // (k6 utilise son propre format de rapport).
+                    publishHTML(target: [
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'tests-perf',          // Dossier contenant le rapport k6
+                        reportFiles: 'perf-results.html', // Rapport HTML généré par k6
+                        reportName: 'Performance Test Results Report'
+                    ])
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // BLOC POST GLOBAL : s'exécute après TOUS les stages,
+    // quel que soit le résultat du pipeline.
+    // ============================================================
+    post {
+
+        // "always" : s'exécute systématiquement, succès ou échec.
+        always {
+
+            // cleanWs() : supprime tout le contenu du workspace Jenkins
+            // après le pipeline. Libère de l'espace disque et évite que
+            // les artefacts d'un build contaminent le suivant.
+            // À noter : les rapports publiés avec publishHTML sont déjà
+            // copiés dans le stockage Jenkins → cleanWs() ne les efface pas.
+            cleanWs()
+
+            echo 'Pipeline terminé.'
+        }
+
+        // "success" : s'exécute uniquement si TOUS les stages ont réussi.
+        success {
+            echo 'Tous les tests sont passés.'
+            echo 'Application lancée avec succès.'
+        }
+
+        // "failure" : s'exécute si au moins un stage a échoué.
+        // Idéal pour envoyer des notifications (Slack, email…).
+        failure {
+            echo 'Le pipeline a échoué.'
+        }
+    }
+}
