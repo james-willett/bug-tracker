@@ -15,11 +15,23 @@ services:
         aliases:
           - docker
     command: --storage-driver overlay2
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   my-jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: my-jenkins
     container_name: my-jenkins
     restart: on-failure
+    depends_on:
+      jenkins-docker:
+        condition: service_healthy
     environment:
       - DOCKER_HOST=tcp://docker:2376
       - DOCKER_CERT_PATH=/certs/client

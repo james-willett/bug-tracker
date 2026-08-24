@@ -241,14 +241,14 @@ describe("BugList", () => {
     });
   });
 
-  it("displays the correct version number", () => {
-    render(<BugList />);
+  it("displays the correct version number", async () => {
+    await renderAndWaitForData();
 
     expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument();
   });
 
-  it("displays the version number in the header", () => {
-    render(<BugList />);
+  it("displays the version number in the header", async () => {
+    await renderAndWaitForData();
 
     const header = screen.getByRole("navigation");
     const versionElement = screen.getByText(`v${APP_VERSION}`);

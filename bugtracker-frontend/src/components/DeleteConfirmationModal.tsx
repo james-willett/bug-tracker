@@ -14,7 +14,7 @@ export default function DeleteConfirmationModal({
     if (!isOpen) return null;
 
     return (
-        <div role="dialog" className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+        <div role="dialog" className="fixed inset-0 bg-gray-600/50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-6 max-w-md w-full">
                 <h2 className="text-xl font-bold mb-4">Confirm Delete</h2>
                 <p className="mb-4">

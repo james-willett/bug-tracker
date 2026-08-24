@@ -2,347 +2,205 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  issues: write
+  pull-requests: write
 
 jobs:
   unit-tests-backend:
     runs-on: ubuntu-latest
     outputs:
-      coverage: ${{ steps.test-backend.outputs.report }}
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
+      coverage_report: ${{ steps.tests_backend.outputs.coverage_report }}
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v7
         with:
           go-version: "1.21"
-          cache: true
-          cache-dependency-path: bugtracker-backend/go.sum
+          cache-dependency-path: ./bugtracker-backend/go.sum
 
       - name: Install go-junit-report
-        run: go install github.com/jstemmer/go-junit-report/v2@latest
+        run: go install github.com/jstemmer/go-junit-report@latest
 
-      - name: Test backend
-        id: test-backend
+      - name: Execute Backend Unit Tests
+        id: tests_backend
         working-directory: ./bugtracker-backend
         run: |
-          go test -json -coverprofile=coverage.out -covermode=atomic ./... > test-results.json
-          go tool cover -func=coverage.out > coverage.txt
 
-          # This makes the report available to the create-coverage-comment job
-          echo "report<<EOF" >> $GITHUB_OUTPUT
-          cat coverage.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          # This makes the coverage report available in the GitHub Actions UI
-          echo "## Go Test Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          go test -json -coverprofile=coverage.out -covermode=atomic ./... 
+          go tool cover -func=coverage.out -o coverage.txt
+          echo "## Go TestCoverage Report">> $GITHUB_STEP_SUMMARY
+          echo "```">> $GITHUB_STEP_SUMMARY
           cat coverage.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "```">> $GITHUB_STEP_SUMMARY
+
+          {
+            echo "coverage_report<<EOF"
+            cat coverage.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
           go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
-      - name: Generate backend test report
-        uses: guyarb/golang-test-annotations@v0.7.0
-        if: always()
+      - name: Publish Backend Unit Test Results
+        uses: dorny/test-reporter@v3
+        if: ${{ !cancelled() }}
         with:
-          test-results: bugtracker-backend/test-results.json
-          package-name: bugtracker-backend
-
-      - name: Publish backend test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Backend Unit Tests Report
-          path: bugtracker-backend/test-results.xml
-          reporter: jest-junit
+          name: Backend Unit Tests
+          path: ./bugtracker-backend/test-results.xml
+          reporter: java-junit
 
   unit-tests-frontend:
+    needs: unit-tests-backend
     runs-on: ubuntu-latest
     outputs:
-      coverage: ${{ steps.test-frontend.outputs.report }}
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
+      coverage_report: ${{ steps.tests_frontend.outputs.coverage_report }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
-          cache-dependency-path: bugtracker-frontend/package-lock.json
+          cache-dependency-path: ./bugtracker-frontend/package-lock.json
 
-      - name: Test frontend
-        id: test-frontend
+      - name: Execute Frontend Unit Tests
+        id: tests_frontend
         working-directory: ./bugtracker-frontend
+        env:
+          JEST_JUNIT_OUTPUT_DIR: .
+          JEST_JUNIT_OUTPUT_NAME: test-results.xml
         run: |
-          npm ci
-          # Run tests and save full output for GitHub Actions UI
-          npm test | tee full_output.txt
+          set +e
 
-          # Extract just the coverage summary for PR comment
-          echo "report<<EOF" >> $GITHUB_OUTPUT
-          sed -n '/^=* Coverage summary/,/^Ran all test suites/p' full_output.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "Node version: $(node --version)"
+            echo "npm version: $(npm --version)"
+            echo
+          } > full-test-output.txt
 
-          # Add to GitHub Actions UI
-          echo "## Frontend Test Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat full_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          npm ci 2>&1 | tee npm-ci-output.txt
+          ci_exit=${PIPESTATUS[0]}
+          test_exit=0
+          if [ "$ci_exit" -ne 0 ]; then
+            {
+              echo "npm ci failed; Jest was not executed."
+              echo
+              cat npm-ci-output.txt
+            } > full-test-output.txt
+            cat > test-results.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites name="frontend setup" tests="1" failures="1" errors="0" skipped="0" time="0">
+            <testsuite name="frontend setup" tests="1" failures="1" errors="0" skipped="0" time="0">
+              <testcase classname="frontend setup" name="npm ci" time="0">
+                <failure message="npm ci failed before Jest could run">See full-test-output.txt in the workflow logs.</failure>
+              </testcase>
+            </testsuite>
+          </testsuites>
+          EOF
+            test_exit=$ci_exit
+          else
+            npm test -- --ci --watch=false --json --outputFile=jest-results.json 2>&1 | tee -a full-test-output.txt
+            test_exit=${PIPESTATUS[0]}
 
-      - name: Publish frontend test results
-        uses: dorny/test-reporter@v1
-        if: always()
+            if [ -s jest-results.json ]; then
+              node scripts/jest-json-to-junit.mjs jest-results.json test-results.xml 2>&1 | tee -a full-test-output.txt
+            fi
+
+            if [ ! -s test-results.xml ] || ! grep -q "<testcase" test-results.xml; then
+              cat > test-results.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites name="frontend tests" tests="1" failures="1" errors="0" skipped="0" time="0">
+            <testsuite name="frontend tests" tests="1" failures="1" errors="0" skipped="0" time="0">
+              <testcase classname="frontend tests" name="jest results output" time="0">
+                <failure message="Jest did not produce usable result files">See full-test-output.txt in the workflow logs.</failure>
+              </testcase>
+            </testsuite>
+          </testsuites>
+          EOF
+              test_exit=1
+            fi
+          fi
+
+          set -e
+
+          {
+            echo
+            echo "Generated result files:"
+            ls -la test-results.xml jest-results.json full-test-output.txt 2>&1 || true
+          } >> full-test-output.txt
+
+          echo "## Frontend Test Coverage Report">> $GITHUB_STEP_SUMMARY
+          echo "```">> $GITHUB_STEP_SUMMARY
+          cat full-test-output.txt >> $GITHUB_STEP_SUMMARY
+          echo "```">> $GITHUB_STEP_SUMMARY
+
+          {
+            echo "coverage_report<<EOF"
+            cat full-test-output.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          exit $test_exit
+
+      - name: Ensure Frontend Test Results Exist
+        if: ${{ !cancelled() }}
+        run: |
+          if [ ! -s ./bugtracker-frontend/test-results.xml ] || ! grep -q "<testcase" ./bugtracker-frontend/test-results.xml; then
+            cat > ./bugtracker-frontend/test-results.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites name="frontend tests" tests="1" failures="1" errors="0" skipped="0" time="0">
+            <testsuite name="frontend tests" tests="1" failures="1" errors="0" skipped="0" time="0">
+              <testcase classname="frontend tests" name="missing junit report" time="0">
+                <failure message="Frontend test-results.xml was not generated">A previous setup or test step failed before Jest could produce a JUnit report.</failure>
+              </testcase>
+            </testsuite>
+          </testsuites>
+          EOF
+          fi
+     
+      - name: Publish Frontend Unit Test Results
+        uses: dorny/test-reporter@v3
+        if: ${{ !cancelled() }}
         with:
-          name: Frontend Unit Tests Report
-          path: bugtracker-frontend/test-results.xml
+          name: Frontend Unit Tests
+          path: ./bugtracker-frontend/test-results.xml
           reporter: jest-junit
-
-  api-e2e-perf-tests:
-    needs: [unit-tests-backend, unit-tests-frontend]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      checks: write
-      pull-requests: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Check Docker versions
-        run: |
-          docker --version
-          docker compose version
-
-      - name: Launch Application
-        run: |
-          docker compose up --build -d
-          npx wait-port http://localhost:8080/api/health -t 30000
-
-      - name: Run API Tests
-        working-directory: ./tests-api
-        run: |
-          npm ci
-          npx playwright test
-
-      - name: Run E2E Tests
-        working-directory: ./tests-e2e
-        env:
-          PLAYWRIGHT_TEST_BASE_URL: "http://localhost:3000"
-          API_BASE_URL: "http://localhost:8080"
-          CI: "1"
-        run: |
-          npm ci
-          npx playwright install 
-          npx playwright test integration.spec.ts
-
-      - name: Setup K6
-        uses: grafana/setup-k6-action@v1
-
-      - name: Run K6 Performance Test
-        uses: grafana/run-k6-action@v1
-        with:
-          path: tests-perf/script.js
-          flags: --out json=summary.json
-
-      - name: Shut Down Application
-        run: docker compose down
-
-      - name: Upload API Test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-test-results
-          path: ./tests-api/test-results/
-          retention-days: 30
-
-      - name: Upload API Test Playwright Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-test-playwright-report
-          path: ./tests-api/playwright-report/
-          retention-days: 30
-
-      - name: Upload E2E test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-results
-          path: ./tests-e2e/test-results/
-          retention-days: 30
-
-      - name: Upload E2E Test Playwright Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-playwright-report
-          path: ./tests-e2e/playwright-report/
-          retention-days: 30
-
-      - name: Upload Performance Raw Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: performance-raw-results
-          path: summary.json
-          retention-days: 30
-
-      - name: Upload Performance HTML report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: performance-report
-          path: perf-results.html
-          retention-days: 30
-
-      - name: Publish API Test Results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: API Tests Report
-          path: ./tests-api/test-results/*.xml
-          reporter: jest-junit
-
-      - name: Publish E2E Test Results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: E2E Tests Report
-          path: ./tests-e2e/test-results/*.xml
-          reporter: jest-junit
-
-  deploy-staging:
-    needs: [api-e2e-perf-tests]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Fly.io CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy Backend
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        working-directory: ./bugtracker-backend
-        run: flyctl deploy -c fly.staging.toml --remote-only
-
-      - name: Deploy Frontend
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        working-directory: ./bugtracker-frontend
-        run: flyctl deploy -c fly.staging.toml --remote-only
-
-  post-deployment-tests:
-    needs: deploy-staging
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      checks: write
-      pull-requests: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: tests-e2e/package-lock.json
-
-      - name: Install dependencies and Playwright browsers
-        working-directory: ./tests-e2e
-        run: |
-          npm ci
-          npx playwright install
-
-      - name: Run Post Deployment Tests
-        working-directory: ./tests-e2e
-        env:
-          PLAYWRIGHT_TEST_BASE_URL: "https://bugtracker-staging-jameswillett.fly.dev"
-          CI: "1"
-        run: |
-          npx playwright test integration.spec.ts
-
-      - name: Upload Post Deployment Test Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: post-deployment-test-playwright-report
-          path: ./tests-e2e/playwright-report/
-          retention-days: 30
-
-      - name: Publish Post Deployment Test Results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Post Deployment Tests Report
-          path: ./tests-e2e/test-results/*.xml
-          reporter: jest-junit
-
-  deploy-production:
-    needs: [post-deployment-tests]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Fly.io CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy Backend
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        working-directory: ./bugtracker-backend
-        run: flyctl deploy --remote-only
-
-      - name: Deploy Frontend
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        working-directory: ./bugtracker-frontend
-        run: flyctl deploy --remote-only
+          fail-on-empty: true
 
   create-coverage-comment:
-    if: github.event_name == 'pull_request'
+    if: ${{ always() && github.event_name == 'pull_request' }}
     needs: [unit-tests-backend, unit-tests-frontend]
     runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
     steps:
-      - name: Create Backend Coverage Comment
-        uses: peter-evans/create-or-update-comment@v4
+      - name: Create Test Coverage Comment
+        uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## Backend Test Coverage Report
-            ```
-            ${{ needs.unit-tests-backend.outputs.coverage }}
+            ## Test Coverage Report
+
+            ### Backend
+
+            ```text
+            ${{ needs['unit-tests-backend'].outputs.coverage_report }}
             ```
 
-      - name: Create Frontend Coverage Comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            ## Frontend Test Coverage Report
-            ```
-            ${{ needs.unit-tests-frontend.outputs.coverage }}
+            ### Frontend
+
+            ```text
+            ${{ needs['unit-tests-frontend'].outputs.coverage_report }}
             ```

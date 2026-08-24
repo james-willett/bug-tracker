@@ -43,7 +43,7 @@ export default function AddBugModal({
   return (
     <div
       data-testid="add-bug-modal"
-      className={`fixed inset-0 bg-black bg-opacity-50 ${
+      className={`fixed inset-0 bg-black/50 ${
         isOpen ? "block" : "hidden"
       }`}
     >
