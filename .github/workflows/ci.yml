@@ -196,7 +196,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: performance-raw-results
-          path: ./tests-perf/summary.json
+          path: summary.json
           retention-days: 30
       
       - name: Publish Performance HTML Report
@@ -204,7 +204,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: performance-report
-          path: ./tests-perf/perf-results.html
+          path: perf-results.html
           retention-days: 30
 
       - name: Publish API Test Report
