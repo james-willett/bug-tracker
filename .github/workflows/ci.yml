@@ -189,6 +189,8 @@ jobs:
           name: API Tests Report
           path: ./tests-api/test-results/*.xml
           reporter: jest-junit
+          report-title: "🔵 API Tests"
+          only-summary: true
       
       - name: Publish e2e Test Report
         uses: dorny/test-reporter@v1
@@ -197,6 +199,8 @@ jobs:
           name: E2E Tests Report
           path: ./tests-e2e/test-results/results.xml
           reporter: jest-junit
+          report-title: "🟢 E2E Tests"
+          only-summary: true
       
 
            
