@@ -47,7 +47,7 @@ jobs:
           go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
       - name: Publish Backend Test Result
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Backend Unit Tests Report
@@ -85,7 +85,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
       
       - name: Publish Frontend Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Frontend Unit Tests Report
@@ -183,7 +183,7 @@ jobs:
           retention-days: 30
 
       - name: Publish API Test Report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: API Tests Report
@@ -193,7 +193,7 @@ jobs:
           only-summary: true
       
       - name: Publish e2e Test Report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: E2E Tests Report
