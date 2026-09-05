@@ -152,7 +152,7 @@ jobs:
       - name: Run Performance Test
         uses: grafana/run-k6-action@v1
         with:
-          path: test-perf/script.js
+          path: tests-perf/script.js
           flags: --out json=summary.json
           
       - name: Stop Application
