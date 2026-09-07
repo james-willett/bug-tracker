@@ -56,7 +56,7 @@ func TestCreateBug(t *testing.T) {
 			name:           "Invalid JSON",
 			payload:        `{"invalid": json}`,
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "invalid request body",
+			expectedError:  "invalid request bodyXXXX",
 		},
 	}
 
