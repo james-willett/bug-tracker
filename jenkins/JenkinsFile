@@ -159,6 +159,30 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy Staging') {
+            when {
+                expression {
+                    return env.GIT_BRANCH == 'origin/main'
+                }
+            }
+
+            environment {
+                RENDER_API_TOKEN = credentials('render-api-token')
+            }
+
+            steps {
+                sh '''
+                    curl -X POST \
+                    -H "Authorization: Bearer ${RENDER_API_TOKEN}" \
+                    https://api.render.com/v1/services/srv-daereonqj5pc73al6m6g/deploys
+
+                    curl -X POST \
+                    -H "Authorization: Bearer ${RENDER_API_TOKEN}" \
+                    https://api.render.com/v1/services/srv-daerg0gn74is73f69n00/deploys
+                '''
+            }
+        }
     }
     post {
             always {
