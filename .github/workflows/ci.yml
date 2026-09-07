@@ -43,7 +43,6 @@ jobs:
           cat coverage.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-
           go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
       - name: Publish Backend Test Result
