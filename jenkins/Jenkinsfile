@@ -9,40 +9,37 @@ pipeline {
                     args '-u 1000:1000'
                 }
             }
-            steps {
-                dir('bugtracker-backend'){
-                    sh '''
-                    mkdir -p .cache/go-build
-mkdir -p .cache/go-mod
 
-GOCACHE="$PWD/.cache/go-build" \
-GOMODCACHE="$PWD/.cache/go-mod" \
-go test -v ./...
-            '''
-            
+            steps {
+                dir('bugtracker-backend') {
+                    sh '''
+                        mkdir -p .cache/go-build
+                        mkdir -p .cache/go-mod
+
+                        GOCACHE="$PWD/.cache/go-build" \
+                        GOMODCACHE="$PWD/.cache/go-mod" \
+                        go test -v ./...
+                    '''
                 }
             }
-        },
+        }
 
-
-                stage('Unit tests frontend') {
+        stage('Unit tests frontend') {
             agent {
                 docker {
                     image 'node:20-alpine'
                     reuseNode true
                 }
             }
+
             steps {
-                dir('bugtracker-frontend'){
+                dir('bugtracker-frontend') {
                     sh '''
-
- npm ci
- npm test
-
-            '''
-            
+                        npm ci
+                        npm test
+                    '''
                 }
             }
-                }
+        }
     }
 }
