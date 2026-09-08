@@ -8,7 +8,7 @@ pipeline {
                     image 'snakee/golang-junit:1.21'
                     args '-u 1000:1000'
                 }
-            },
+            }
             steps {
                 dir('bugtracker-backend'){
                     sh '''
@@ -22,7 +22,7 @@ go test -v ./...
             
                 }
             }
-        }
+        },
 
 
                 stage('Unit tests frontend') {
