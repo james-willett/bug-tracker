@@ -51,12 +51,12 @@ func TestCreateBug(t *testing.T) {
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "title is required",
-		},
+		}
 		{
 			name:           "Invalid JSON",
 			payload:        `{"invalid": json}`,
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "invalid request bodyXXXX",
+			expectedError:  "invalid request body",
 		},
 	}
 
