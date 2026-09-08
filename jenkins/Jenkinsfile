@@ -37,9 +37,16 @@ pipeline {
                     sh '''
                         npm ci
                         npm test
-                    '''
+                 
+                 } '''
                 }
-            }
+                }
+
+            post    
+            {
+                always {
+                    junit 'bugtracker-backend/test-reports/*.xml'
+                }        
         }
     }
 }
