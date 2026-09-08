@@ -38,8 +38,9 @@ pipeline {
                         npm ci
                         npm test
                  
-                 } '''
+                 '''
                 }
+            }
                 
 
             post    
