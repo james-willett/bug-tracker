@@ -40,13 +40,14 @@ pipeline {
                  
                  } '''
                 }
-                }
+                
 
             post    
             {
                 always {
                     junit 'bugtracker-backend/test-reports/*.xml'
-                }        
+                }     
+            }   
         }
     }
 }
