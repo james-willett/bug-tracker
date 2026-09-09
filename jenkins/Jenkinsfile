@@ -15,6 +15,7 @@ pipeline {
                     sh '''
                         mkdir -p .cache/go-build
                         mkdir -p .cache/go-mod
+                        mkdir -p reports
 
                         GOCACHE="$PWD/.cache/go-build" \
                         GOMODCACHE="$PWD/.cache/go-mod" \
@@ -22,10 +23,7 @@ pipeline {
 
                         # Generate coverage report
                         go test -coverprofile=coverage.out ./...
-                        go tool cover -html=coverage.out -o coverage.html
-
-                        mkdir -p reports
-                        mv coverage.html reports/
+                        go tool cover -html=coverage.out -o reports/coverage.html
 
                     '''
                 }
