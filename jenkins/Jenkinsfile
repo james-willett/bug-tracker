@@ -19,12 +19,25 @@ pipeline {
                         GOCACHE="$PWD/.cache/go-build" \
                         GOMODCACHE="$PWD/.cache/go-mod" \
                         go test -v ./... 2>&1 | go-junit-report > test-results.xml
+
+                        # Generate coverage report
+                        go test -coverprofile=coverage.out ./...
+                        go tool cover -html=coverage.out -o coverage.html
+
+                        mkdir -p reports
+                        mv coverage.html reports/
+
                     '''
                 }
             }
             post {
                 always {
                     junit 'bugtracker-backend/test-results.xml'
+                    publishHTML target: [
+                        reportDir: 'bugtracker-backend/reports',
+                        reportFiles: 'coverage.html',
+                        reportName: 'Coverage Report'
+                    ]
                 }
             }
         }
