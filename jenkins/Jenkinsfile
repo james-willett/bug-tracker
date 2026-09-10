@@ -34,7 +34,7 @@ pipeline {
                     publishHTML target: [
                         reportDir: 'bugtracker-backend/reports',
                         reportFiles: 'coverage.html',
-                        reportName: 'backend_coverage_report'
+                        reportName: 'backendcoveragereport'
                     ]
                 }
             }
