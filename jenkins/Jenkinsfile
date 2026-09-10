@@ -12,20 +12,22 @@ pipeline {
 
             steps {
                 dir('bugtracker-backend') {
-                    sh '''
-                        mkdir -p .cache/go-build
-                        mkdir -p .cache/go-mod
-                        mkdir -p reports
+                   sh '''
+    mkdir -p .cache/go-build
+    mkdir -p .cache/go-mod
+    mkdir -p reports
 
-                        GOCACHE="$PWD/.cache/go-build" \
-                        GOMODCACHE="$PWD/.cache/go-mod" \
-                        go test -v ./... 2>&1 | go-junit-report > test-results.xml
+    export GOCACHE="$PWD/.cache/go-build"
+    export GOMODCACHE="$PWD/.cache/go-mod"
 
-                        # Generate coverage report
-                        go test -coverprofile=coverage.out ./...
-                        go tool cover -html=coverage.out -o reports/coverage.html
+    go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
-                    '''
+    # Generate coverage report
+    go test -coverprofile=coverage.out ./...
+    go tool cover -html=coverage.out -o reports/coverage.html
+'''
+
+       
                 }
             }
             post {
