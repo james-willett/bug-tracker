@@ -121,6 +121,17 @@ pipeline {
                     sh "npx playwright test"
                 }
             }
+            post {
+                always {
+                    junit 'tests-api/test-results/results.xtml'
+                        publishHTML target: [
+                            reportDir: 'tests-api/playwright-report',
+                            reportFiles: 'index.html',
+                            reportName: 'API Test Report',
+                        ]
+                    }
+                }
+            }
 
         }
     }
