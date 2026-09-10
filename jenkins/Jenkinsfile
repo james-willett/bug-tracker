@@ -98,8 +98,7 @@ pipeline {
                 }
             }
         }
-        stage {
-            "Launch Application"{
+        stage ("Launch Application"){
                 agent{
                     docker{
                         image 'docker:27.5.1'
@@ -111,11 +110,11 @@ pipeline {
 
                 steps{
                     sh '''
-                        docker-compose up -- build -d
+                        docker-compose up --build -d
                     '''
                 }
             }
-        }
+        
     }
 
     post {
