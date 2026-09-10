@@ -4,23 +4,23 @@ pipeline {
     stages {
         stage('Unit Tests - Backend') {
             agent {
-                docker{
+                docker {
                     image 'snakee/golang-junit:1.21'
                     reuseNode true
                 }
-
             }
-            
+            environment {
+                GOCACHE = "${WORKSPACE}/.cache/go-build"
+                HOME = "${WORKSPACE}"
+            }
             steps {
-                dir ('bugtracker-backend') {
-                      sh '''
-          export HOME=$WORKSPACE
-          go test -v ./...
-        '''
+                dir('bugtracker-backend') {
+                    sh '''
+                      mkdir -p $GOCACHE
+                      go test -v ./...
+                    '''
                 }
             }
         }
     }
 }
-
-
