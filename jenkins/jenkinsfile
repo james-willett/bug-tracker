@@ -6,7 +6,7 @@ pipeline {
             agent {
                 docker{
                     image 'snakee/golang-junit:1.21'
-                    resuseNode true 
+                    reuseNode true 
                 }
             }
             steps {
