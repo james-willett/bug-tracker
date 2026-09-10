@@ -13,19 +13,19 @@ pipeline {
             steps {
                 dir('bugtracker-backend') {
                    sh '''
-    mkdir -p .cache/go-build
-    mkdir -p .cache/go-mod
-    mkdir -p reports
+                        mkdir -p .cache/go-build
+                        mkdir -p .cache/go-mod
+                        mkdir -p reports
 
-    export GOCACHE="$PWD/.cache/go-build"
-    export GOMODCACHE="$PWD/.cache/go-mod"
+                        export GOCACHE="$PWD/.cache/go-build"
+                        export GOMODCACHE="$PWD/.cache/go-mod"
 
-    go test -v ./... 2>&1 | go-junit-report > test-results.xml
+                        go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
-    # Generate coverage report
-    go test -coverprofile=coverage.out ./...
-    go tool cover -html=coverage.out -o reports/coverage.html
-'''
+                        # Generate coverage report
+                        go test -coverprofile=coverage.out ./...
+                        go tool cover -html=coverage.out -o reports/coverage.html
+                        '''
 
        
                 }
@@ -36,7 +36,7 @@ pipeline {
                     publishHTML target: [
                         reportDir: 'bugtracker-backend/reports',
                         reportFiles: 'coverage.html',
-                        reportName: 'coveragereport'
+                        reportName: 'BackendCoverage Report'
                     ]
                 }
             }
@@ -55,6 +55,8 @@ pipeline {
                     sh '''
                         npm ci
                         npm test
+                        mkdir -p reports
+                        mv coverage reports/
                  
                  '''
                 }
@@ -65,6 +67,11 @@ pipeline {
             {
                 always {
                     junit 'bugtracker-frontend/test-results.xml'
+                    publishHTML target: [
+                        reportDir: 'bugtracker-frontend/reports/coverage',
+                        reportFiles: 'index.html',
+                        reportName: 'Frontend Coverage Report'
+                    ]
                 }     
             }   
         }
