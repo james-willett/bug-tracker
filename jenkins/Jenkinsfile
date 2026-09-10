@@ -4,6 +4,7 @@ pipeline {
     stages {
         stage('Execute Unit Tests') {
             parallel {
+
                 stage('Unit tests backend') {
                     agent {
                         docker {
@@ -15,6 +16,8 @@ pipeline {
                     steps {
                         dir('bugtracker-backend') {
                             sh '''
+                                set -o pipefail
+
                                 mkdir -p .cache/go-build
                                 mkdir -p .cache/go-mod
                                 mkdir -p reports
@@ -22,24 +25,33 @@ pipeline {
                                 export GOCACHE="$PWD/.cache/go-build"
                                 export GOMODCACHE="$PWD/.cache/go-mod"
 
-                                go test -v ./... 2>&1 | go-junit-report > test-results.xml
+                                go test -v -coverprofile=coverage.out ./... \
+                                    2>&1 | go-junit-report > test-results.xml
 
-                                # Generate coverage report
-                                go test -coverprofile=coverage.out ./...
-                                go tool cover -html=coverage.out -o reports/coverage.html
+                                go tool cover \
+                                    -html=coverage.out \
+                                    -o reports/coverage.html
                             '''
                         }
                     }
 
                     post {
                         always {
-                            junit 'bugtracker-backend/test-results.xml'
+                            junit(
+                                testResults: 'bugtracker-backend/test-results.xml',
+                                allowEmptyResults: true
+                            )
 
-                            publishHTML target: [
-                                reportDir: 'bugtracker-backend/reports',
-                                reportFiles: 'coverage.html',
-                                reportName: 'Backend Coverage Report'
-                            ]
+                            publishHTML(
+                                target: [
+                                    reportDir: 'bugtracker-backend/reports',
+                                    reportFiles: 'coverage.html',
+                                    reportName: 'Backend Coverage Report',
+                                    allowMissing: true,
+                                    keepAll: true,
+                                    alwaysLinkToLastBuild: true
+                                ]
+                            )
                         }
                     }
                 }
@@ -48,7 +60,6 @@ pipeline {
                     agent {
                         docker {
                             image 'node:20-alpine'
-                            reuseNode true
                         }
                     }
 
@@ -56,7 +67,8 @@ pipeline {
                         dir('bugtracker-frontend') {
                             sh '''
                                 npm ci
-                                npm test
+
+                                npm test -- --runInBand --watchAll=false
 
                                 mkdir -p reports
                                 mv coverage reports/
@@ -66,26 +78,31 @@ pipeline {
 
                     post {
                         always {
-                            junit 'bugtracker-frontend/test-results.xml'
+                            junit(
+                                testResults: 'bugtracker-frontend/test-results.xml',
+                                allowEmptyResults: true
+                            )
 
-                            publishHTML target: [
-                                reportDir: 'bugtracker-frontend/reports/coverage',
-                                reportFiles: 'index.html',
-                                reportName: 'Frontend Coverage Report'
-                            ]
+                            publishHTML(
+                                target: [
+                                    reportDir: 'bugtracker-frontend/reports/coverage',
+                                    reportFiles: 'index.html',
+                                    reportName: 'Frontend Coverage Report',
+                                    allowMissing: true,
+                                    keepAll: true,
+                                    alwaysLinkToLastBuild: true
+                                ]
+                            )
                         }
                     }
                 }
             }
-    
-
-
-       }
+        }
     }
-              post{
-        always{
+
+    post {
+        always {
             cleanWs()
         }
-       } 
-    
+    }
 }
