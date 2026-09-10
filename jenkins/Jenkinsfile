@@ -16,21 +16,19 @@ pipeline {
                     steps {
                         dir('bugtracker-backend') {
                             sh '''
-                                set -o pipefail
+                                                    mkdir -p .cache/go-build
+                        mkdir -p .cache/go-mod
+                        mkdir -p reports
 
-                                mkdir -p .cache/go-build
-                                mkdir -p .cache/go-mod
-                                mkdir -p reports
+                        export GOCACHE="$PWD/.cache/go-build"
+                        export GOMODCACHE="$PWD/.cache/go-mod"
 
-                                export GOCACHE="$PWD/.cache/go-build"
-                                export GOMODCACHE="$PWD/.cache/go-mod"
+                        go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
-                                go test -v -coverprofile=coverage.out ./... \
-                                    2>&1 | go-junit-report > test-results.xml
+                        # Generate coverage report
+                        go test -coverprofile=coverage.out ./...
+                        go tool cover -html=coverage.out -o reports/coverage.html
 
-                                go tool cover \
-                                    -html=coverage.out \
-                                    -o reports/coverage.html
                             '''
                         }
                     }
@@ -42,16 +40,11 @@ pipeline {
                                 allowEmptyResults: true
                             )
 
-                            publishHTML(
-                                target: [
+                            publishHTML target: [
                                     reportDir: 'bugtracker-backend/reports',
                                     reportFiles: 'coverage.html',
                                     reportName: 'Backend Coverage Report',
-                                    allowMissing: true,
-                                    keepAll: true,
-                                    alwaysLinkToLastBuild: true
                                 ]
-                            )
                         }
                     }
                 }
@@ -66,33 +59,28 @@ pipeline {
                     steps {
                         dir('bugtracker-frontend') {
                             sh '''
-                                npm ci
-
-                                npm test -- --runInBand --watchAll=false
-
-                                mkdir -p reports
-                                mv coverage reports/
-                            '''
+                            npm ci
+                            npm test
+                         mkdir -p reports
+                         mv coverage reports/
+                        '''
                         }
                     }
 
                     post {
                         always {
                             junit(
-                                testResults: 'bugtracker-frontend/test-results.xml',
-                                allowEmptyResults: true
+                                testResults: 'bugtracker-frontend/test-results.xml'
                             )
 
-                            publishHTML(
-                                target: [
+                            publishHTML  target: [
                                     reportDir: 'bugtracker-frontend/reports/coverage',
                                     reportFiles: 'index.html',
                                     reportName: 'Frontend Coverage Report',
-                                    allowMissing: true,
-                                    keepAll: true,
-                                    alwaysLinkToLastBuild: true
+                
+           
                                 ]
-                            )
+                            
                         }
                     }
                 }
