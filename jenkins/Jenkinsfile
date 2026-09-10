@@ -2,78 +2,43 @@ pipeline {
     agent any
 
     stages {
-
         stage('Unit tests backend') {
             agent {
                 docker {
                     image 'snakee/golang-junit:1.21'
                     args '-u 1000:1000'
-                    reuseNode true
                 }
             }
 
             steps {
                 dir('bugtracker-backend') {
                     sh '''
-                        set -o pipefail
-
-                        echo "=== Preparing directories ==="
-
                         mkdir -p .cache/go-build
                         mkdir -p .cache/go-mod
                         mkdir -p reports
-
-                        echo "=== Running backend unit tests ==="
 
                         GOCACHE="$PWD/.cache/go-build" \
                         GOMODCACHE="$PWD/.cache/go-mod" \
                         go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
-                        echo "=== Generating coverage ==="
-
-                        GOCACHE="$PWD/.cache/go-build" \
-                        GOMODCACHE="$PWD/.cache/go-mod" \
+                        # Generate coverage report
                         go test -coverprofile=coverage.out ./...
+                        go tool cover -html=coverage.out -o reports/coverage.html
 
-                        go tool cover \
-                            -html=coverage.out \
-                            -o reports/coverage.html
-
-                        echo "=== Fixing report permissions ==="
-
-                        chmod -R a+rX reports
-
-                        echo "=== Backend report files ==="
-
-                        ls -lah reports/
-                        ls -lah test-results.xml
-                        ls -lah coverage.out
-
-                        echo "=== Backend tests completed ==="
                     '''
                 }
             }
-
             post {
                 always {
-                    junit(
-                        testResults: 'bugtracker-backend/test-results.xml',
-                        allowEmptyResults: true
-                    )
-
-                    publishHTML(target: [
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
+                    junit 'bugtracker-backend/test-results.xml'
+                    publishHTML target: [
                         reportDir: 'bugtracker-backend/reports',
                         reportFiles: 'coverage.html',
-                        reportName: 'Coverage Report',
-                        reportTitles: 'Go Coverage'
-                    ])
+                        reportName: 'coveragereport'
+                    ]
                 }
             }
         }
-
 
         stage('Unit tests frontend') {
             agent {
@@ -86,29 +51,20 @@ pipeline {
             steps {
                 dir('bugtracker-frontend') {
                     sh '''
-                        set -e
-
-                        echo "=== Installing frontend dependencies ==="
-
                         npm ci
-
-                        echo "=== Running frontend unit tests ==="
-
                         npm test
-
-                        echo "=== Frontend tests completed ==="
-                    '''
+                 
+                 '''
                 }
             }
+                
 
-            post {
+            post    
+            {
                 always {
-                    junit(
-                        testResults: 'bugtracker-frontend/test-results.xml',
-                        allowEmptyResults: true
-                    )
-                }
-            }
+                    junit 'bugtracker-frontend/test-results.xml'
+                }     
+            }   
         }
     }
 }
