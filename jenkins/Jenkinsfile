@@ -62,8 +62,8 @@ pipeline {
                             npm ci
                             npm test
                             mkdir -p reports
-rm -rf reports/coverage
-mv coverage reports/
+                            rm -rf reports/coverage
+                            mv coverage reports/
 
                         '''
                         }
@@ -108,7 +108,7 @@ mv coverage reports/
         stage ("Api Tests"){
             agent{
                 docker{
-                    image 'mcr.microsoft.com/playwright:v1.50.0-focal'
+                    image 'mcr.microsoft.com/playwright:v1.50.0-jammy'
                     reuseNode true
                     args '-u 0 --network=host'
                 }
