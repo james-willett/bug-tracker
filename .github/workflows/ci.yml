@@ -24,8 +24,7 @@ jobs:
 
       - name: Execute Backend Unit Tests
         working-directory: ./bugtracker-backend
-        run: |
-        go test -v ./... 2>&1 | go-junit-report > test-results.xml
+        run: go test -v ./... 2>&1 | go-junit-report > test-results.xml
 
   unit-tests-frontend:
     needs: unit-tests-backend
