@@ -88,27 +88,27 @@ jobs:
         reporter: jest-junit
   
 
-create-coverage-comment:
-  if: github.event_name == 'pull_request'
-  needs: [unit-tests-backend, unit-tests-frontend]
-  runs-on: ubuntu-latest
-  permissions:
-    pull-requests: write
-  steps:
-    - name: Create Coverage Comment
-      uses: peter-evans/create-or-update-comment@v4
-      with:
-        issue-number: ${{ github.event.pull_request.number }}
-        body: |
-          ## Backend Test Coverage Report
-          ```
-          ${{ needs.unit-tests-backend.outputs.coverage-report }}
-          ```
+  create-coverage-comment:
+   if: github.event_name == 'pull_request'
+   needs: [unit-tests-backend, unit-tests-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+     pull-requests: write
+    steps:
+      - name: Create Coverage Comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## Backend Test Coverage Report
+           ```
+              ${{ needs.unit-tests-backend.outputs.coverage-report }}
+           ```
 
-          ## Frontend Test Coverage Report
-          ```
-          ${{ needs.unit-tests-frontend.outputs.coverage-report }}
-          ```
+            ## Frontend Test Coverage Report
+            ```
+            ${{ needs.unit-tests-frontend.outputs.coverage-report }}
+            ```
     
     
     
