@@ -178,6 +178,16 @@ pipeline {
             }
 
         }
+
+        post {
+            always {
+                publishHTML target: [
+                    reportDir: 'tests-perf',
+                    reportFiles: 'perf-results.html',
+                    reportName: 'Performance Test Report'
+                ]
+            }
+        }
       }
 
 
