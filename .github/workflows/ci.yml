@@ -26,7 +26,7 @@ jobs:
         working-directory: ./bugtracker-backend
         run: |
           go test -json -coverprofile=coverage.out -covermode=atomic ./...
-          go tool cover -html=coverage.out -o coverage.txt
+          go tool cover -func=coverage.out > coverage.txt
 
           echo '## Go Test Coverage Report' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
