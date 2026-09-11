@@ -35,10 +35,19 @@ jobs:
         with: 
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: bugtracker-frontend/package-lock.json
+          cache-dependency-path: bugtracker-frontend/
 
       - name: Execute Frontend Unit Tests
         working-directory: ./bugtracker-frontend
         run: |
           npm ci
           npm test
+
+      - name: Publish Frontend Test Results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Frontend Unit Tests reporter
+          path: bugtracker-frontend/test-results.xml
+          reporter: jest-junit
+          
