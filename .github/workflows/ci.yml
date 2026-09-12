@@ -22,7 +22,8 @@ jobs:
             
             - name: Execute unit tests for backend
               working-directory: ./bugtracker-backend
-              run: go test -v ./...
+              run: |
+               go test -v ./... | go-junit-report > test-results.xml
 
             - name: Upload test results backend
               uses: dorny/test-reporter@v1
