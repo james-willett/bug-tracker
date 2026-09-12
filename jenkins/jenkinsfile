@@ -11,12 +11,20 @@ pipeline {
             } 
             steps {
                 dir ('bugtracker-backend') {
-                      sh 'go test -v ./...'
+                      sh '''
+                      go test -v ./... 2>&1 | tee test-reports/test-results.log | go-junit-report > test-reports/results.xml
+                      go tool cover -html=coverage.out -o coverage.html
+                      mkdir -p test-reports
+                      mv coverage.html test-reports/coverage.html 
+                      '''
                 }
             }
             post {
                 always {
                     junit 'bugtracker-backend/test-reports/*.xml'
+                    reportDir:  'bugtracker-backend/test-reports'
+                    reportFiles: 'coverage.html'
+                    reportName: 'Coverage Report'
                 }
         }
     }
