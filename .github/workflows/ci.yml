@@ -37,7 +37,7 @@ jobs:
 
     
     unit-test-frontend:
-        needs: unit-test-backend
+    
         runs-on: ubuntu-latest
         steps:
             -   name: Checkout repository
@@ -70,5 +70,25 @@ jobs:
                   name: Frontend Unit Tests report
                   path: ./bugtracker-frontend/test-results.xml
                   reporter: jest-junit
+
+    create-coverage-comment:
+        if: github.event_name == 'pull-request'
+        needs: unit-test-frontend
+        runs-on: ubuntu-latest
+        permissions:
+            pull-requests: write
+        steps:
+            
+            - name: Create coverage comment
+              uses: peter-evans/create-or-update-comment@v4
+              with:
+                issue-number: ${{ github.event.pull_request.number }}
+                body: |
+                    ## Unit Test Coverage Summary
+                    '''
+                    ${{ steps.unit-test-frontend.outputs.coverage }}
+
+                    '''
+              
 
     
