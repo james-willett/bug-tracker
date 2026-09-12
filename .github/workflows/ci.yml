@@ -42,6 +42,8 @@ jobs:
     unit-test-frontend:
     
         runs-on: ubuntu-latest
+        outputs:
+            coverage: ${{ steps.test-frontend.outputs.coverage }}
         steps:
             -   name: Checkout repository
                 uses: actions/checkout@v4
@@ -55,6 +57,7 @@ jobs:
 
             
             - name: Execute unit tests for frontend
+              id: test-frontend
               working-directory: ./bugtracker-frontend
               run: |
                npm ci
@@ -64,6 +67,10 @@ jobs:
                echo "'''">>$GITHUB_STEP_SUMMARY
                cat full_output.txt >>$GITHUB_STEP_SUMMARY
                echo "'''">>$GITHUB_STEP_SUMMARY
+
+               echo "report<<EOF">>$GITHUB_OUTPUT
+               cat full_output.txt >>$GITHUB_OUTPUT
+               echo "EOF">>$GITHUB_OUTPUT
 
             
             - name: Upload test results
