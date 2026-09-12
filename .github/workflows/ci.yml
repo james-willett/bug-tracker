@@ -57,7 +57,7 @@ jobs:
                npm ci
                npm test | tee full_output.txt
 
-               echo""## Frontend Unit Test Coverage">>$GITHUB_STEP_SUMMARY
+               echo"## Frontend Unit Test Coverage">>$GITHUB_STEP_SUMMARY"
                echo"'''">>$GITHUB_STEP_SUMMARY
                cat full_output.txt >>$GITHUB_STEP_SUMMARY
                echo"'''">>$GITHUB_STEP_SUMMARY
