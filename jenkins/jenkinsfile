@@ -1,0 +1,108 @@
+pipeline {
+    agent any
+
+    stages {
+        # for parallel execution of unit tests, assume there is frontend as well
+        stage ('Parallel Unit Test'){
+            parallel {
+                stage('Unit Tests - Frontend') {
+                    agent {
+                        docker{
+                            image 'node:18'
+                            reuseNode true
+                        }
+                    } 
+                    steps {
+                        dir ('bugtracker-frontend') {
+                            sh '''
+                            npm install
+                            npm test -- --reporters=default jest-junit
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'bugtracker-frontend/test-reports/*.xml'
+                        }
+                    }
+                }
+                stage('Unit Tests - Backend') {
+            agent {
+                docker{
+                    image 'snakee/golang-junit:1.21'
+                    reuseNode true
+                }
+            } 
+            steps {
+                dir ('bugtracker-backend') {
+                      sh '''
+                      go test -v ./... 2>&1 | tee test-reports/test-results.log | go-junit-report > test-reports/results.xml
+                      go tool cover -html=coverage.out -o coverage.html
+                      mkdir -p test-reports
+                      mv coverage.html test-reports/coverage.html 
+                      '''
+                }
+            }
+            post {
+                always {
+                    junit 'bugtracker-backend/test-reports/*.xml'
+                    publishHTML  target: [ reportDir:  'bugtracker-backend/test-reports'
+                                        reportFiles: 'coverage.html'
+                                        reportName: 'Coverage Report']
+                }
+        }
+        
+        }
+        stage('Launch Application') {
+            agent {
+                docker{
+                    image 'docker:24.0.5'
+                    reuseNode true
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0'
+                }
+            }
+            steps { sh 'docker compose up --build -d'
+            }
+        }
+        stage('API Tests') {
+            agent {
+                docker{
+                    image 'mcr.microsoft.com/playwright:v1.44.0-focal -u 0'
+                    reuseNode true
+                }
+            }
+            steps {
+                dir ('bugtracker-api-tests') {
+                    sh '''
+                    npx wait-port http://localhost:8080 --timeout=30000
+                    npm ci
+                    npx playwright test --reporter=junit
+                    '''
+                }
+            }
+            post{
+                always{
+                    junit 'bugtracker-api-tests/test-reports/*.xml'
+                    publishHTML target:[
+                        reportDir: 'bugtracker-api-tests/test-reports',
+                        reportFiles: 'playwright-report/index.html',
+                        reportName: 'Playwright Report'
+                        
+                    ]
+                }
+            }
+            post {
+                always {
+                    junit 'bugtracker-api-tests/test-reports/*.xml'
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
+
+
