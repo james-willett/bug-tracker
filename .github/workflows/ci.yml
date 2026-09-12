@@ -8,7 +8,8 @@ jobs:
     unit-test-backend:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            -   name: Checkout repository
+                uses: actions/checkout@v4
 
             - name: Set up Go
               uses: actions/setup-go@v4
