@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches:
-        - main
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -89,7 +92,7 @@ jobs:
   
   create-coverage-comment:
     if: github.event_name == 'pull_request'
-    needs: [unit-tests-backend]
+    needs: [unit-tests-backend, unit-tests-frontend]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -219,11 +222,11 @@ jobs:
   
   deploy-staging:
     needs: [api-e2e-performance-tests]
-    # if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
-      - uses: action/checkout@v4
+      - uses: actions/checkout@v4
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
