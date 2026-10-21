@@ -219,7 +219,7 @@ jobs:
   
   deploy-staging:
     needs: [api-e2e-performance-tests]
-    if: github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
